@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&family=Philosopher:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+    </style>
+    <script type="text/javascript" src="https://livejs.com/live.js"></script>
+    <script src="main.js"></script>
+
+    <div class="container">
+        <div class="left">
+            <div class="profile-pic">
+                <img src="assets/images/pfp.jpeg" alt="Kevin Yang">
+            </div>
+            <h1 class="title">KEVIN YANG</h1>
+            <h2 class="subtitle">/kɛvɪn/ • /yaŋ/</h2>
+            <h2 class="subtitle">logic astronaut</h2>
+            <p class="tagline">exploring multidimensionally.</p>
+            <div class="socials">
+                <h1>the links</h1>
+                <div class="links">
+                    <p>⇱ <a href="https://github.com/kvnyng" target="_blank">Github</a></p>
+                    <p>⇱ <a href="https://linkedin.com/in/kvnyng" target="_blank">LinkedIn</a></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="right">
+            <div class="selector">
+                <p>
+                <p class="underlined">the</p> <span class="past">past</span>/<span class="present">present</span>/<span
+                    class="future">future</span></p>
+            </div>
+            <div class="content">
+                Content to display
+            </div>
+
+            <script>
+                const contentMapping = {
+                    past: "content/past.html",
+                    present: "content/present.html",
+                    future: "content/future.html",
+                };
+
+                let isLocked = false;
+
+                const selector = document.querySelector('.selector');
+                const content = document.querySelector('.content');
+                const past = document.querySelector('.past');
+                const present = document.querySelector('.present');
+                const future = document.querySelector('.future');
+
+                fetchContent('present');
+                present.classList.add('selected')
+
+                isLocked = false;
+
+                selector.addEventListener('click', (e) => {
+                    if (isLocked) return; // Prevent interaction if locked
+
+                    if (e.target.tagName === 'SPAN') {
+                        // Update the content
+                        const contentKey = e.target.innerHTML;
+
+                        const newContent = contentMapping[contentKey];
+
+                        if (contentMapping[contentKey]) {
+                            // Add animation class before updating content
+                            content.classList.add('animate');
+                            fetchContent(contentKey);
+                            // Remove the animation class after it finishes (500ms in this case)
+                            setTimeout(() => {
+                                content.classList.remove('animate');
+                                isLocked = false;
+                            }, 350);
+                        } else {
+                            content.innerHTML = 'Content not found.';
+                        }
+
+                        // Remove the 'selected' class from all spans
+                        [past, present, future].forEach(span => span.classList.remove('selected'));
+
+                        // Add the 'selected' class to the clicked span
+                        e.target.classList.add('selected');
+
+                        // Log the clicked span
+                        if (e.target === past) {
+                            console.log('Past has been clicked!');
+                        } else if (e.target === present) {
+                            console.log('Present has been clicked!');
+                        } else if (e.target === future) {
+                            console.log('Future has been clicked!');
+                        } else {
+                            console.log("In else");
+                        }
+                    }
+                });
+
+
+                function fetchContent(key) {
+                    if (isLocked) return;
+
+                    const url = contentMapping[key];
+
+                    isLocked = true;
+                    fetch(url)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error('Network response was not ok');
+                            }
+                            return response.text();
+                        })
+                        .then(data => {
+                            content.innerHTML = data;
+                        })
+                        .catch(error => {
+                            console.error('There was a problem with the fetch operation:', error);
+                            content.innerHTML = '<p>Error loading content.</p>';
+                        });
+                }
+            </script>
+        </div>
+
+</head>

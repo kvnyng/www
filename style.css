@@ -1,0 +1,313 @@
+:root {
+    --text-color: white;
+    /* Dark gray */
+    --background-color: #1E1E1E;
+    /* Light gray */
+    --highlight-color: #FFD700;
+    /* Yellow */
+    --accent-color: #FF7B00;
+    /* Yellow */
+    --grey-out: #808080;
+    /* Grey */
+    --shadow: #363636;
+    /* Dark grey */
+}
+
+
+.container {
+    display: flex;
+}
+
+.left {
+    width: 33.333%;
+    padding-left: 12%;
+    padding-top: 7%;
+    padding-right: 70px;
+    /* margin-right: 60px; */
+}
+
+.right {
+    width: 66%;
+    margin-top: 10%;
+    margin-right: 30%;
+    margin-left: 10px;
+}
+
+/* Media query for smaller screens */
+@media (max-width: 950px) {
+    .container {
+        flex-direction: column;
+        /* Stack items vertically */
+    }
+
+    .right {
+        width: 33.333%;
+        margin-top: 0%;
+        margin-right: 0%;
+        padding-right: 0%;
+        padding-left: 10%
+    }
+}
+
+/* create a style for the title text that has a custom font and size */
+.title {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 2rem;
+    margin-bottom: 1%;
+}
+
+.subtitle {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 1.25rem;
+    margin-top: 1%;
+}
+
+.tagline {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 1.25rem;
+    margin-top: 1%;
+    margin-bottom: 1%;
+    line-height: 1.5;
+}
+
+.socials {
+    font-family: 'Philosopher', sans-serif;
+    color: var(--grey-out);
+    margin-top: 30%;
+    margin-bottom: 1%;
+}
+
+.socials h1 {
+    color: var(--text-color);
+    font-family: 'Philosopher', sans-serif;
+    font-weight: 400;
+    font-size: 1.25rem;
+    margin-top: 1%;
+    margin-bottom: 1%;
+}
+
+.socials .links {
+    margin-top: 2%;
+    color: var(--grey-out);
+    margin-right: 1rem;
+    font-size: 1.25rem;
+}
+
+.socials .links p {
+    margin-top: 1%;
+    margin-bottom: 1%;
+    color: var(--grey-out)
+}
+
+.socials .links p:hover {
+    color: var(--highlight-color);
+}
+
+.socials .links a {
+    color: var(--grey-out);
+    margin-right: 1rem;
+    font-size: 1.25rem;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.selector {
+    color: var(--shadow);
+    font-family: 'Philosopher', sans-serif;
+    font-size: 1.25rem;
+    margin-top: 1%;
+    margin-bottom: .5rem;
+    padding-bottom: .5rem;
+    height: 2rem;
+    user-select: none;
+    /* Disable text selection */
+    -webkit-user-select: none;
+    /* For Safari */
+    -ms-user-select: none;
+    /* For Internet Explorer */
+}
+
+.selector .underlined {
+    display: inline-block;
+    border-bottom: 3px solid var(--accent-color);
+    padding-bottom: 3px;
+}
+
+.selector span {
+    color: var(--shadow);
+    font-family: 'Philosopher', sans-serif;
+    font-size: 1.25rem;
+    margin-top: 1%;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+
+.selector span.selected {
+    color: white;
+}
+
+.selector span:hover {
+    color: var(--highlight-color);
+}
+
+.selector span:active {
+    color: var(--highlight-color);
+}
+
+.selector .future {
+    color: var(--grey-out);
+}
+
+.selector .past {
+    color: var(--grey-out);
+}
+
+.selector .present {
+    color: var(--grey-out);
+}
+
+.content {
+    font-family: 'Philosopher', sans-serif;
+    font-size: 1.25rem;
+    color: var(--text-color);
+    margin-top: .75rem;
+    padding-top: .5rem;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.content p {
+    margin-top: 0%;
+    padding-top: 0%;
+    width: 80%
+}
+
+.content .entry {
+    margin-top: 1%;
+    padding-top: 1%;
+    word-wrap: break-word;
+}
+
+.content .entry p {
+    line-height: 1.25;
+}
+
+.content .entry .number {
+    color: var(--grey-out);
+    font-family: 'Azeret Mono', sans-serif;
+    font-size: 1.25rem;
+    margin-top: 1%;
+    padding-bottom: .25rem;
+}
+
+.content .entry a {
+    color: var(--text-color);
+    text-decoration-style: underline;
+    font-family: 'Azeret Mono', sans-serif;
+    font-size: 1.1rem;
+    word-spacing: -2px;
+}
+
+.content .entry a:hover {
+    color: var(--highlight-color);
+}
+
+
+/* Fade-in animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Animation class */
+.animate {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.profile-pic img {
+    width: 10rem;
+    height: 10rem;
+    border-radius: 50%;
+}
+
+h1 {
+    color: var(--text-color);
+    font-family: 'Philosopher', sans-serif;
+}
+
+h2 {
+    color: var(--text-color);
+    font-family: 'Philosopher', sans-serif;
+}
+
+
+p {
+    color: var(--text-color);
+    font-family: 'Philosopher', sans-serif;
+    font-size: 1.25rem;
+}
+
+/* create a style for the body text that has a custom font and size */
+body {
+    background-color: var(--background-color);
+    font-family: 'Philosopher', sans-serif;
+}
+
+.philosopher-regular {
+    font-family: "Philosopher", serif;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.philosopher-bold {
+    font-family: "Philosopher", serif;
+    font-weight: 700;
+    font-style: normal;
+}
+
+.philosopher-regular-italic {
+    font-family: "Philosopher", serif;
+    font-weight: 400;
+    font-style: italic;
+}
+
+.philosopher-bold-italic {
+    font-family: "Philosopher", serif;
+    font-weight: 700;
+    font-style: italic;
+}
+
+.azeret-mono-regular {
+    font-family: "Azeret Mono", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+}
+
+.azeret-mono-bold {
+    font-family: "Azeret Mono", serif;
+    font-optical-sizing: auto;
+    font-weight: 700;
+    font-style: normal;
+}
+
+.azeret-mono-regular-italic {
+    font-family: "Azeret Mono", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: italic;
+}
+
+.azeret-mono-bold-italic {
+    font-family: "Azeret Mono", serif;
+    font-optical-sizing: auto;
+    font-weight: 700;
+    font-style: italic;
+}
