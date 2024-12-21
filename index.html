@@ -38,7 +38,6 @@
                     class="future">future</span></p>
             </div>
             <div class="content">
-                Content to display
             </div>
 
             <script>
@@ -72,8 +71,8 @@
 
                         if (contentMapping[contentKey]) {
                             // Add animation class before updating content
-                            content.classList.add('animate');
                             fetchContent(contentKey);
+                            content.classList.add('animate');
                             // Remove the animation class after it finishes (500ms in this case)
                             setTimeout(() => {
                                 content.classList.remove('animate');
@@ -109,6 +108,8 @@
                     const url = contentMapping[key];
 
                     isLocked = true;
+
+                    content.innerHTML = '<p></p>';
                     fetch(url)
                         .then(response => {
                             if (!response.ok) {
