@@ -40,6 +40,14 @@
         /* Stack items vertically */
     }
 
+    .left {
+        width: 100%;
+    }
+
+    .socials {
+        margin-top: 10%;
+    }
+
     .right {
         width: 80%;
         margin-top: 0%;
