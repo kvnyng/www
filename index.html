@@ -2,6 +2,16 @@
 <html lang="en">
 
 <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YFRHXEL78W"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-YFRHXEL78W');
+    </script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home</title>
@@ -55,6 +65,8 @@
                 const present = document.querySelector('.present');
                 const future = document.querySelector('.future');
 
+                let contentKey = 'present';
+
                 fetchContent('present');
                 present.classList.add('selected')
 
@@ -64,8 +76,11 @@
                     if (isLocked) return; // Prevent interaction if locked
 
                     if (e.target.tagName === 'SPAN') {
+
+                        if (contentKey === e.target.innerHTML) return;
+
                         // Update the content
-                        const contentKey = e.target.innerHTML;
+                        contentKey = e.target.innerHTML;
 
                         const newContent = contentMapping[contentKey];
 
