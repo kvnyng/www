@@ -236,7 +236,7 @@
 
 /* Animation class */
 .animate {
-    animation: fadeIn 0.4 ease-in-out;
+    animation: fadeIn 0.35s ease-in-out;
 }
 
 .profile-pic img {
