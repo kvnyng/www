@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="date" content="2024-03-31">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example Post</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&family=Philosopher:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="../style.css">
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll('a[href^="http"]').forEach(link => {
+                if (!link.href.includes(window.location.hostname)) {
+                    link.setAttribute('target', '_blank');
+                    link.setAttribute('rel', 'noopener noreferrer');
+                }
+            });
+        });
+    </script>
+</head>
+
+<body>
+    <div class="blog-container">
+        <div class="back-button">
+            <a href="../index.html"
+                style="color: var(--highlight-color); font-family: 'Philosopher', sans-serif; font-size: 1rem; text-decoration: none; display: inline-block;">←
+                Back to Blog</a>
+        </div>
+        <div style="position: relative;">
+            <h1 class="blog-title">Example Post</h1>
+            <p class="blog-meta">2024-03-31</p>
+        </div>
+        <h2 class="blog-subtitle">$subtitle</h2>
+        <div class="blog-content">
+            <h1 id="heading-1">Heading 1</h1>
+<h2 id="heading-2">Heading 2</h2>
+<h3 id="heading-3">Heading 3</h3>
+<hr />
+<p>This is a paragraph with <strong>bold text</strong>, <em>italic text</em>, and <strong><em>bold italic text</em></strong>.</p>
+<p>Here is a <a href="https://www.openai.com">link to OpenAI</a> and an inline <code>code</code> snippet.</p>
+<blockquote>
+<p>This is a blockquote.</p>
+<ul>
+<li>It can span multiple lines</li>
+<li>And include lists inside</li>
+</ul>
+</blockquote>
+<pre class="codehilite"><code class="language-python"># This is a code block
+def hello_world():
+    print(&quot;Hello, world!&quot;)
+</code></pre>
+
+<ul>
+<li>Unordered list item 1</li>
+<li>Nested item</li>
+<li>Unordered list item 2</li>
+</ul>
+<ol>
+<li>Ordered list item 1</li>
+<li>Ordered list item 2</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Column A</th>
+<th>Column B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A1</td>
+<td>B1</td>
+</tr>
+<tr>
+<td>A2</td>
+<td>B2</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="Alt text for image" src="https://via.placeholder.com/150" /></p>
+<hr />
+<p>That's all the Markdown elements!</p>
+        </div>
+    </div>
+    <footer class="blog-footer">
+        <p>© Kevin Yang — <a href="/" class="footer-link">main site</a></p>
+    </footer>
+</body>
+
+</html>
