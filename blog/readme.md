@@ -25,9 +25,23 @@
    ```
 
 4. (Optional) Preview locally before committing:
+
+   **Option A – Using Python’s built-in server:**
    ```bash
    python3 -m http.server
    ```
+
+   **Option B – Using `live-server` for automatic reload on changes:**
+
+   - First, install `live-server` globally if you haven't already:
+     ```bash
+     npm install -g live-server
+     ```
+
+   - Then run it from the root of your blog directory:
+     ```bash
+     live-server blog/
+     ```
 
 5. Commit and push to GitHub:
    ```bash
