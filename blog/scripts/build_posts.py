@@ -51,18 +51,24 @@ def render_html(metadata, body_html):
 
 def build():
     os.makedirs(OUT_DIR, exist_ok=True)
+    posts = []
 
     for filename in os.listdir(SRC_DIR):
-        if not filename.endswith('.md'):
+        if not filename.endswith('.md') or filename.startswith('!'):
             continue
         filepath = os.path.join(SRC_DIR, filename)
         metadata, body_md = parse_markdown(filepath)
         if 'slug' not in metadata:
             print(f"Skipping {filename}: missing 'slug'")
             continue
+        posts.append((metadata, body_md))
+
+    # Sort posts by date descending
+    posts.sort(key=lambda p: p[0].get('date', ''), reverse=True)
+
+    for metadata, body_md in posts:
         html_body = convert_to_html(body_md)
         full_html = render_html(metadata, html_body)
-
         output_path = os.path.join(OUT_DIR, f"{metadata['slug']}.html")
         with open(output_path, 'w', encoding='utf-8') as out_file:
             out_file.write(full_html)

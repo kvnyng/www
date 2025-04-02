@@ -3,6 +3,7 @@ import json
 
 POSTS_DIR = "../blog/posts"
 POSTS_JSON_PATH = "../blog/posts.json"
+SRC_DIR = "../blog/posts_src"
 
 def slugify(filename):
     return os.path.splitext(filename)[0].lower().replace(' ', '-')
@@ -36,11 +37,15 @@ def main():
         with open(POSTS_JSON_PATH, "r") as f:
             existing = json.load(f)
 
+    hidden_sources = {os.path.splitext(f)[0] for f in os.listdir(SRC_DIR) if f.startswith('!') and f.endswith('.md')}
     existing_files = set(os.listdir(POSTS_DIR))
     updated_posts = []
 
     for filename in existing_files:
         if filename.endswith(".html"):
+            base_name = os.path.splitext(filename)[0]
+            if base_name in hidden_sources:
+                continue
             updated_posts.append(generate_post_entry(filename))
 
     # Sort posts by date descending

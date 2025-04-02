@@ -1,16 +1,16 @@
 [
   {
+    "title": "Chiron",
+    "slug": "chiron",
+    "url": "posts/chiron.html",
+    "date": "2025-04-02",
+    "subtitle": "Towards Dynamic Motion"
+  },
+  {
     "title": "Ai Is Not Just A Tool",
     "slug": "ai-is-not-just-a-tool",
     "url": "posts/ai-is-not-just-a-tool.html",
     "date": "2025-03-31",
     "subtitle": "Learning When to Use It, Not Just How"
-  },
-  {
-    "title": "Example Post",
-    "slug": "example-post",
-    "url": "posts/example-post.html",
-    "date": "2024-03-31",
-    "subtitle": ""
   }
 ]

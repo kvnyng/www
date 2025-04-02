@@ -197,8 +197,9 @@ blockquote {
 .blog-content img {
     display: block;
     margin: 2rem auto;
-    max-width: 100%;
+    max-width: 80%;
     height: auto;
+    border-radius: 4%;
 }
 
 .blog-subtitle {
