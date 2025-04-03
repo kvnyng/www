@@ -7,7 +7,7 @@ slug: ai-is-not-just-a-tool
 There’s a growing chorus in the age of artificial intelligence that frames mastery as “learning how to prompt.” Books, tutorials, and courses are springing up everywhere promising to make you a “prompt engineer,” a “ChatGPT master,” or an “AI power user.”
 
 But let me offer a different lens:  
-**Learning how to use AI isn’t about mastering prompts. It’s about mastering *when* to use AI.**
+**Learning *how* to use AI isn’t about mastering prompts. It’s about mastering *when* to use the prompts.**
 
 If we’re going to live with AI—work with it, build with it, *think* with it—we need to understand it not just as a tool, but as a vehicle.
 
@@ -17,13 +17,13 @@ AI is like a car. Before the invention of the automobile, humans walked, ran, or
 
 But the convenience came with a tradeoff. We stopped walking. We ran less. Over time, many of us grew weaker, more sedentary. The car expanded the horizons of what we could *do*, but it also diminished what we could *be*.
 
-AI presents us with the same double-edged gift.
+AI presents us with the same double-edged sword.
 
 ## The New Locomotion: From Thinking to Prompting
 
-Where we once had to *think* deeply, write thoughtfully, and research diligently, we now have AI tools that can do it for us—or at least help dramatically. Want a business plan? ChatGPT can draft one. Need a marketing strategy? Ask Claude or Gemini. Want to debug code? CoPilot has your back.
+Where we once had to *think* deeply, write thoughtfully, and research diligently, we now have AI tools that can do it for us—or at least help dramatically. Want a business plan? ChatGPT can draft one. Need a marketing strategy? Ask Claude or Gemini. Want to debug code? Copilot has your back.
 
-These tools are, without question, vehicles. They get us to our destination faster, with less effort. And that’s incredible—until we realize we haven’t really learned the terrain we just crossed.
+These tools are, without question, vehicles. They get us to our destination faster and with less effort. That’s incredible—until we realize we never experience the terrain we just crossed.
 
 ## The Artists Who Still Sketch
 
@@ -55,7 +55,7 @@ And sometimes, you *should* drive:
 
 There’s a beautiful irony in this moment of acceleration: the more AI enables us to go further, the more valuable *manual expertise* becomes.
 
-Consider chefs who still butcher their own meat or make pasta by hand. Or calligraphers who hand-letter with ink. Or engineers who still sketch circuits on paper before simulating them.
+Consider chefs who still butcher their own meat or bakers who still roll their own dough. Or calligraphers who hand-letter with ink. Or engineers who still sketch their designs on paper.
 
 These people are like long-distance runners in a world of self-driving cars. They do it for precision, for self-discipline, for joy. They refine their bodies and minds, even when machines offer shortcuts.
 
