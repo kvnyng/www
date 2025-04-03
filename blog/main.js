@@ -2,7 +2,7 @@ console.log("main.js loaded!");
 
 const BLOG_LIST = document.getElementById('blog-list');
 const POSTS_JSON = 'posts.json';
-const VIEW_API = 'https://yourdomain.com/api/view'; // Replace with your actual Worker endpoint
+const VIEW_API = 'https://view-counter-worker.ky200617.workers.dev'; // Replace with your actual Worker endpoint
 
 // Fetch and render posts
 fetch(POSTS_JSON)
@@ -53,11 +53,6 @@ fetch(POSTS_JSON)
                 .then(data => {
                     count.textContent = `${data.views} views`;
                 });
-
-            // Track view on click
-            link.addEventListener('click', () => {
-                fetch(`${VIEW_API}?slug=${post.slug}`, { method: 'POST' });
-            });
         });
     })
     .catch(error => {
