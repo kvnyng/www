@@ -147,7 +147,8 @@
     font-size: 1.25rem;
     margin-top: 1%;
     cursor: pointer;
-    text-decoration: underline;
+    /* border-bottom: 1.5px solid var(--text-color); */
+    /* text-decoration: underline; */
 }
 
 
@@ -210,14 +211,17 @@
 
 .content .entry a {
     color: var(--text-color);
-    text-decoration-style: underline;
+    border-bottom: 1.5px solid var(--text-color);
     font-family: 'Azeret Mono', sans-serif;
     font-size: 1.1rem;
-    word-spacing: -2px;
+    word-spacing: -5px;
+    letter-spacing: -0.04em;
+    text-decoration: none;
 }
 
 .content .entry a:hover {
     color: var(--highlight-color);
+    border-bottom-color: var(--highlight-color);
 }
 
 
@@ -297,6 +301,7 @@ body {
     font-optical-sizing: auto;
     font-weight: 400;
     font-style: normal;
+    letter-spacing: -0.03em;
 }
 
 .azeret-mono-bold {
@@ -304,6 +309,7 @@ body {
     font-optical-sizing: auto;
     font-weight: 700;
     font-style: normal;
+    letter-spacing: -0.03em;
 }
 
 .azeret-mono-regular-italic {
@@ -311,6 +317,7 @@ body {
     font-optical-sizing: auto;
     font-weight: 400;
     font-style: italic;
+    letter-spacing: -0.03em;
 }
 
 .azeret-mono-bold-italic {
@@ -318,4 +325,5 @@ body {
     font-optical-sizing: auto;
     font-weight: 700;
     font-style: italic;
+    letter-spacing: -0.03em;
 }
