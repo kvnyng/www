@@ -22,6 +22,11 @@
     <script type="text/javascript" src="https://livejs.com/live.js"></script>
     <script src="main.js"></script>
 
+    <script>
+        const slug = '/'; // dynamically generated in real use
+        fetch(`https://view-counter-worker.ky200617.workers.dev?slug=${slug}`, { method: "POST" });
+    </script>
+
     <div class="container">
         <div class="left">
             <div class="profile-pic">
