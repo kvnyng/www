@@ -4,7 +4,7 @@
 
 1. Source your virtual environment:
    ```bash
-   source venv/bin/activate
+   source .venv/bin/activate
    ```
 
 2. Run the post generation script to convert markdown to HTML:
