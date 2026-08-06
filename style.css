@@ -22,6 +22,16 @@
        at the same size, so the reading text sits above the 20px the headings
        still use. */
     --font-size-body: 1.4rem;
+
+    /* Motion. One decelerating curve for everything that arrives, so the
+       entrance and the content swaps read as the same gesture. */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --reveal-duration: 560ms;
+    --reveal-stagger: 60ms;
+    --reveal-distance: 12px;
+    /* The fade-out before a swap is deliberately faster than the fade-in:
+       leaving should feel dismissed, arriving should feel placed. */
+    --swap-out-duration: 160ms;
 }
 
 
@@ -183,7 +193,6 @@
     color: var(--text-color);
     margin-top: .75rem;
     padding-top: .5rem;
-    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .content p {
@@ -208,7 +217,7 @@
     font-family: var(--font-mono);
     font-size: 1.2rem;
     margin-top: 1%;
-    padding-bottom: .25rem;
+    padding-bottom: .2rem;
 }
 
 /* Inherits size and spacing from the surrounding prose — the old size bump and
@@ -230,11 +239,20 @@
 }
 
 
-/* Fade-in animation */
-@keyframes fadeIn {
+/* ── Entrance ───────────────────────────────────────────────────────────────
+   The page holds at opacity 0 until the webfonts and the profile image have
+   settled, then everything rises into place on a stagger. Waiting is what
+   makes it smooth: `display=swap` otherwise paints Georgia first and reflows
+   to Garamond a beat later, and that reflow is the jolt worth hiding.
+
+   .js-preload is set by an inline script in the <head>, so the hidden state is
+   in place before first paint. It is also the whole opt-out: no JS means no
+   class, and the page renders as static HTML with no animation at all. */
+
+@keyframes rise-in {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(var(--reveal-distance));
     }
 
     to {
@@ -243,9 +261,55 @@
     }
 }
 
-/* Animation class */
-.animate {
-    animation: fadeIn 0.35s ease-in-out;
+.js-preload [data-reveal],
+.js-preload .content {
+    opacity: 0;
+}
+
+/* --reveal-order is the element's place in the queue, set in the markup, so
+   re-timing the entrance means renumbering rather than editing delays.
+   `backwards` fill is what makes a stagger work — without it every element
+   paints immediately and only starts moving when its delay elapses. */
+.is-revealed [data-reveal] {
+    animation: rise-in var(--reveal-duration) var(--ease-out) backwards;
+    animation-delay: calc(var(--reveal-order, 0) * var(--reveal-stagger));
+}
+
+/* Entries animate individually rather than as one block, which keeps the
+   right column arriving in the same rhythm as the left.
+
+   This rule also covers every later swap, for free: innerHTML builds fresh
+   elements, and a fresh element runs its animation from the start. --entry-base
+   offsets them behind the left column on the first paint; the script zeroes it
+   once the entrance is over, so swaps begin immediately. */
+.is-revealed .content .entry {
+    animation: rise-in var(--reveal-duration) var(--ease-out) backwards;
+    animation-delay: calc((var(--entry-base, 0) + var(--entry-index, 0)) * var(--reveal-stagger));
+}
+
+/* Fade the outgoing set out before the incoming one is injected — on the
+   container, since the entries leave together even though they arrive apart.
+
+   The transition is declared only on the .is-swapping side. A transition runs
+   off the properties of the state being entered, so leaving that state has
+   none: the container snaps back to full opacity and the rule above is the
+   only thing that fades the new entries in. Declaring it on the base .content
+   instead would fade the container back at the same time, and the first entry
+   would come up through two stacked opacity ramps. */
+.content.is-swapping {
+    opacity: 0;
+    transition: opacity var(--swap-out-duration) ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        /* Keep a short cross-fade — the wait for fonts is still worth having,
+           and an instant appearance after it reads as a flash. Drop the travel
+           and the stagger, which are the parts that read as motion. */
+        --reveal-duration: 200ms;
+        --reveal-stagger: 0ms;
+        --reveal-distance: 0px;
+    }
 }
 
 .profile-pic img {
