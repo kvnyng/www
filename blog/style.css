@@ -6,22 +6,31 @@
     --grey-out: #808080;
     --shadow: #363636;
     --blog-max-width: 800px;
+
+    /* Type roles: Garamond for reading text, Philosopher for headings and
+       section labels, Azeret for the deliberate monospace accents. */
+    --font-body: 'EB Garamond', Georgia, serif;
+    --font-heading: 'Philosopher', sans-serif;
+    --font-mono: 'Azeret Mono', monospace;
+
+    /* 22.4px — see the note in the root stylesheet. */
+    --font-size-body: 1.4rem;
 }
 
 body {
     background-color: var(--background-color);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-body);
     color: var(--text-color);
 }
 
 .title {
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 3rem;
     margin-bottom: 3rem;
 }
 
 .subtitle {
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.5rem;
     color: var(--grey-out);
     margin-top: -2rem;
@@ -29,8 +38,8 @@ body {
 }
 
 .tagline {
-    font-family: 'Philosopher', sans-serif;
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
     margin-top: 1%;
     margin-bottom: 1%;
     line-height: 1.5;
@@ -40,7 +49,7 @@ body {
     margin-top: 2%;
     color: var(--grey-out);
     margin-right: 1rem;
-    font-size: 1.25rem;
+    font-size: var(--font-size-body);
 }
 
 .links p {
@@ -55,14 +64,14 @@ body {
 .links a {
     color: var(--accent-color);
     margin-right: 1rem;
-    font-size: 1.25rem;
+    font-size: var(--font-size-body);
     text-decoration: none;
     display: inline-block;
 }
 
 .selector {
     color: var(--shadow);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
     margin-bottom: .5rem;
@@ -79,7 +88,7 @@ body {
 
 .selector span {
     color: var(--shadow);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
     cursor: pointer;
@@ -102,8 +111,8 @@ body {
 }
 
 .content {
-    font-family: 'Philosopher', sans-serif;
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
     color: var(--text-color);
     margin-top: .75rem;
     padding-top: .5rem;
@@ -128,10 +137,10 @@ body {
 
 .content .entry a {
     color: var(--text-color);
-    text-decoration-style: underline;
-    font-family: 'Azeret Mono', sans-serif;
-    font-size: 1.1rem;
-    word-spacing: -2px;
+    font-family: var(--font-body);
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
 }
 
 .content .entry a:hover {
@@ -148,22 +157,22 @@ body {
 
 .blog-title {
     font-size: 3rem;
-    font-family: 'Philosopher', serif;
+    font-family: var(--font-heading);
     margin-bottom: 3rem;
     color: var(--text-color);
     position: relative;
 }
 
 .blog-content {
-    font-family: 'Philosopher', sans-serif;
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
     line-height: 1.6;
     color: var(--text-color);
 }
 
 .blog-meta {
     color: var(--grey-out);
-    font-family: 'Azeret Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.9rem;
     margin-top: -1rem;
     margin-bottom: 0.5rem;
@@ -203,7 +212,7 @@ blockquote {
 }
 
 .blog-subtitle {
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.5rem;
     color: var(--grey-out);
     margin-top: -2rem;
@@ -215,7 +224,7 @@ blockquote {
     border-left: 4px solid var(--accent-color);
     padding: 1rem 1.5rem;
     margin-bottom: 2rem;
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-body);
     transition: background-color 0.3s;
 }
 
@@ -226,7 +235,7 @@ blockquote {
 .blog-post-list .post-quote a {
     text-decoration: none;
     color: var(--highlight-color);
-    font-size: 1.25rem;
+    font-size: var(--font-size-body);
     font-weight: bold;
 }
 
@@ -235,7 +244,7 @@ blockquote {
     margin-top: 4rem;
     padding-top: 2rem;
     padding-bottom: 2rem;
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-body);
     font-size: 1rem;
     color: var(--grey-out);
     border-top: 1px solid var(--shadow);

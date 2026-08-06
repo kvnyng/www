@@ -11,6 +11,17 @@
     /* Grey */
     --shadow: #363636;
     /* Dark grey */
+
+    /* Type roles: Garamond for reading text, Philosopher for headings and
+       section labels, Azeret for the deliberate monospace accents. */
+    --font-body: 'EB Garamond', Georgia, serif;
+    --font-heading: 'Philosopher', sans-serif;
+    --font-mono: 'Azeret Mono', monospace;
+
+    /* 22.4px. Garamond has a small x-height and reads smaller than Philosopher
+       at the same size, so the reading text sits above the 20px the headings
+       still use. */
+    --font-size-body: 1.4rem;
 }
 
 
@@ -19,67 +30,50 @@
 }
 
 .left {
-    width: 33.333%;
+    /* Sized to its own content rather than a percentage, so the two columns
+       stay a constant distance apart instead of drifting with the viewport. */
+    flex: 0 0 auto;
+    width: 18rem;
     padding-left: 12%;
     padding-top: 7%;
     padding-right: 70px;
     /* margin-right: 60px; */
 }
 
+/* Hold the reading column to a fixed measure so the text stays bunched, and
+   let the leftover space fall away as plain whitespace. Nothing is reserved
+   on the right, so narrowing the window eats the empty space first and only
+   reflows the text once the measure itself no longer fits. */
 .right {
-    width: 66%;
+    flex: 1 1 auto;
+    max-width: 34rem;
     margin-top: 10%;
-    margin-right: 30%;
     margin-left: 10px;
-}
-
-/* Media query for smaller screens */
-@media (max-width: 950px) {
-    .container {
-        flex-direction: column;
-        /* Stack items vertically */
-    }
-
-    .left {
-        width: 100%;
-    }
-
-    .socials {
-        margin-top: 10%;
-    }
-
-    .right {
-        width: 80%;
-        margin-top: 0%;
-        margin-right: 0%;
-        padding-right: 0%;
-        padding-left: 10%
-    }
 }
 
 /* create a style for the title text that has a custom font and size */
 .title {
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 2rem;
     margin-bottom: 1%;
 }
 
 .subtitle {
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
 }
 
 .tagline {
-    font-family: 'Philosopher', sans-serif;
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
     margin-top: 1%;
     margin-bottom: 1%;
     line-height: 1.5;
 }
 
 .socials {
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-body);
     color: var(--grey-out);
     margin-top: 30%;
     margin-bottom: 1%;
@@ -87,7 +81,7 @@
 
 .socials h1 {
     color: var(--text-color);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-weight: 400;
     font-size: 1.25rem;
     margin-top: 1%;
@@ -98,7 +92,7 @@
     margin-top: 2%;
     color: var(--grey-out);
     margin-right: 1rem;
-    font-size: 1.25rem;
+    font-size: var(--font-size-body);
 }
 
 .socials .links p {
@@ -114,14 +108,14 @@
 .socials .links a {
     color: var(--grey-out);
     margin-right: 1rem;
-    font-size: 1.25rem;
+    font-size: var(--font-size-body);
     text-decoration: none;
     display: inline-block;
 }
 
 .selector {
     color: var(--shadow);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
     margin-bottom: .5rem;
@@ -135,15 +129,22 @@
     /* For Internet Explorer */
 }
 
+/* The rule sits at the bottom of the line box, so its distance from the word is
+   the font's descent (7px for Garamond here) plus any padding — 10px in all.
+   Pulling the line box in tighter than the font's own height is the only way to
+   close that up; the padding-top puts back what the tighter line box took off
+   the ascent, so only the space below the word changes. */
 .selector .underlined {
     display: inline-block;
     border-bottom: 3px solid var(--accent-color);
-    padding-bottom: 3px;
+    line-height: 1.16;
+    padding-top: 2px;
+    padding-bottom: 0;
 }
 
 .selector span {
     color: var(--shadow);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
     cursor: pointer;
@@ -177,8 +178,8 @@
 }
 
 .content {
-    font-family: 'Philosopher', sans-serif;
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
     color: var(--text-color);
     margin-top: .75rem;
     padding-top: .5rem;
@@ -188,7 +189,8 @@
 .content p {
     margin-top: 0%;
     padding-top: 0%;
-    width: 90%
+    /* The measure is set by .right's max-width now, not by an inner percentage. */
+    width: 100%;
 }
 
 .content .entry {
@@ -203,25 +205,28 @@
 
 .content .entry .number {
     color: var(--grey-out);
-    font-family: 'Azeret Mono', sans-serif;
+    font-family: var(--font-mono);
     font-size: 1.2rem;
     margin-top: 1%;
     padding-bottom: .25rem;
 }
 
+/* Inherits size and spacing from the surrounding prose — the old size bump and
+   negative tracking here only existed to tame Azeret's wide advance width.
+
+   A real underline rather than border-bottom: a border sits at the bottom of
+   the inline box (baseline plus the font's full descent, ~6px here), which
+   can't be tightened. text-underline-offset can. */
 .content .entry a {
     color: var(--text-color);
-    border-bottom: 1.5px solid var(--text-color);
-    font-family: 'Azeret Mono', sans-serif;
-    font-size: 1.1rem;
-    word-spacing: -5px;
-    letter-spacing: -0.04em;
-    text-decoration: none;
+    font-family: var(--font-body);
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
 }
 
 .content .entry a:hover {
     color: var(--highlight-color);
-    border-bottom-color: var(--highlight-color);
 }
 
 
@@ -251,25 +256,25 @@
 
 h1 {
     color: var(--text-color);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
 }
 
 h2 {
     color: var(--text-color);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-heading);
 }
 
 
 p {
     color: var(--text-color);
-    font-family: 'Philosopher', sans-serif;
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
 }
 
 /* create a style for the body text that has a custom font and size */
 body {
     background-color: var(--background-color);
-    font-family: 'Philosopher', sans-serif;
+    font-family: var(--font-body);
 }
 
 .philosopher-regular {
@@ -326,4 +331,32 @@ body {
     font-weight: 700;
     font-style: italic;
     letter-spacing: -0.03em;
+}
+
+/* Media query for smaller screens.
+   Must stay last so these rules win over the base declarations above —
+   they share the same specificity, so source order decides. */
+@media (max-width: 950px) {
+    .container {
+        flex-direction: column;
+        /* Stack items vertically */
+    }
+
+    .left {
+        width: 100%;
+    }
+
+    .socials {
+        /* Fixed unit, not a percentage: percentage margins resolve against the
+           container's width, and .left is full-width once stacked. */
+        margin-top: 2rem;
+    }
+
+    .right {
+        width: 80%;
+        margin-top: 0%;
+        margin-right: 0%;
+        padding-right: 0%;
+        padding-left: 10%
+    }
 }
