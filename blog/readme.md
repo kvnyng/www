@@ -26,22 +26,11 @@
 
 4. (Optional) Preview locally before committing:
 
-   **Option A – Using Python’s built-in server:**
-   ```bash
-   python3 -m http.server
-   ```
+   Run `bun run dev` from the repo root and open
+   http://localhost:8000/blog/. It reloads on change, so re-running the two
+   build steps above is enough to see the new post — no restart needed.
 
-   **Option B – Using `live-server` for automatic reload on changes:**
-
-   - First, install `live-server` globally if you haven't already:
-     ```bash
-     npm install -g live-server
-     ```
-
-   - Then run it from the root of your blog directory:
-     ```bash
-     live-server blog/
-     ```
+   (`python3 -m http.server` also still works, just without the reload.)
 
 5. Commit and push to GitHub:
    ```bash

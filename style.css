@@ -74,6 +74,14 @@
     margin-top: 1%;
 }
 
+/* Philosopher ships 400 and 700 only, and h2 defaults to bold — so this is the
+   one step down available. Lighter than the pronunciation above it on purpose:
+   same size, less weight, so the two lines read in order rather than as a pair
+   of equal claims. */
+.motto {
+    font-weight: 400;
+}
+
 .tagline {
     font-family: var(--font-body);
     font-size: var(--font-size-body);
@@ -111,7 +119,12 @@
     color: var(--grey-out)
 }
 
-.socials .links p:hover {
+/* Hover belongs to the link, not the line. The <p> is a block, so its :hover
+   box ran the full width of the column and lit the row up from dead space
+   several inches away from the word. :has puts the ⇱ back in step with the
+   link it belongs to without widening the target that triggers it. */
+.socials .links a:hover,
+.socials .links p:has(a:hover) {
     color: var(--highlight-color);
 }
 

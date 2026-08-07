@@ -1,0 +1,7 @@
+{
+  "name": "www",
+  "private": true,
+  "scripts": {
+    "dev": "bunx live-server --port=8000"
+  }
+}
