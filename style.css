@@ -406,8 +406,16 @@ body {
         /* Stack items vertically */
     }
 
-    .left {
+    /* Both columns run edge to edge with the same gutter once stacked.
+       box-sizing is the load-bearing part: without it the desktop padding
+       (12% + 70px) lands *outside* a full-width box and pushes the column past
+       the viewport, which is what put a horizontal scrollbar on phones. */
+    .left,
+    .right {
+        box-sizing: border-box;
         width: 100%;
+        padding-left: 10%;
+        padding-right: 10%;
     }
 
     .socials {
@@ -417,10 +425,7 @@ body {
     }
 
     .right {
-        width: 80%;
-        margin-top: 0%;
-        margin-right: 0%;
-        padding-right: 0%;
-        padding-left: 10%
+        margin-top: 0;
+        margin-left: 0;
     }
 }

@@ -149,6 +149,10 @@ body {
 
 .blog-container {
     flex: 1;
+    /* border-box so the gutter is carved out of the 100%, not added to it —
+       otherwise the column is 2rem wider than the viewport on a phone and the
+       page scrolls sideways. */
+    box-sizing: border-box;
     width: 100%;
     max-width: var(--blog-max-width);
     margin: 0 auto;
