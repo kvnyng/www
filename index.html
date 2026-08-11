@@ -25,6 +25,18 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Philosopher:ital,wght@0,400;0,700;1,400;1,700&display=swap"
         rel="stylesheet">
+    <!-- The brush hand for the Chinese column — see the note on --font-hanzi
+         for why this one.
+
+         A request of its own, because `text` applies to every family in the URL
+         it appears in and the three faces above need their whole character set.
+         It earns the extra round trip several times over: Long Cang is a CJK
+         face, and the three characters of the name fall in three different
+         unicode-range subsets, so the ordinary link would pull ~120kB down over
+         three connections to draw them. Named explicitly, Google returns one
+         file holding those three glyphs and nothing else — 2.2kB. -->
+    <link href="https://fonts.googleapis.com/css2?family=Long+Cang&text=%E6%9D%A8%E6%B3%93%E9%94%B4&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 
     <!-- Inline and synchronous on purpose: this has to land before the first
@@ -45,13 +57,41 @@
          one after the other, so the page fills in diagonally. -->
     <div class="container">
         <div class="left">
-            <div class="profile-pic" data-reveal style="--reveal-order: 0">
-                <img src="assets/images/pfp.jpeg" alt="Kevin Yang" width="160" height="160">
+            <!-- The portrait and the script column run as one unit: the column
+                 down the portrait's right edge, the name below it, so the type
+                 turns a corner around the photograph. -->
+            <div class="identity">
+                <div class="profile-pic" data-reveal style="--reveal-order: 0">
+                    <img src="assets/images/pfp.jpeg" alt="Kevin Yang" width="160" height="160">
+                </div>
+                <!-- A button rather than text: pressing it replays its stroke,
+                     and that should be reachable from the keyboard and announced
+                     as something you can press. .script-name is what any such
+                     column shares — the reset, the hover, the stroke; the second
+                     class carries what is particular to the hand. The inner span
+                     is what the animation runs on, for the reason given in the
+                     stylesheet.
+
+                     aria-label rather than title: the description is worth having
+                     for anyone who can't see the strokes, but as a title it also
+                     came back as a browser tooltip — a grey box parked over the
+                     portrait, which is the one thing on the page the name is
+                     meant to sit quietly beside. The colour change on hover is
+                     hint enough that it's live.
+
+                     lang on the span, not the button — it belongs to the three
+                     characters, so it steers font selection if the webfont never
+                     lands and it doesn't hand the English aria-label to a
+                     Chinese voice. -->
+                <button class="script-name name-hanzi" type="button" data-reveal style="--reveal-order: 1"
+                    aria-label="Yang Hongkai, written in Chinese — press to write it again">
+                    <span lang="zh-Hans">杨泓锴</span>
+                </button>
             </div>
-            <h1 class="title" data-reveal style="--reveal-order: 1">KEVIN YANG</h1>
-            <h2 class="subtitle" data-reveal style="--reveal-order: 2">/kɛvɪn/ • /yaŋ/</h2>
-            <h2 class="subtitle motto" data-reveal style="--reveal-order: 3">engineering the best vibes</h2>
-            <p class="tagline" data-reveal style="--reveal-order: 4">@harvard @csail @neo @contrary</p>
+            <h1 class="title" data-reveal style="--reveal-order: 2">KEVIN YANG</h1>
+            <h2 class="subtitle" data-reveal style="--reveal-order: 3">/kɛvɪn/ • /yaŋ/</h2>
+            <h2 class="subtitle motto" data-reveal style="--reveal-order: 4">engineering the best vibes</h2>
+            <p class="tagline" data-reveal style="--reveal-order: 5">@harvard @csail @neo @contrary</p>
             <div class="socials" data-reveal style="--reveal-order: 6">
                 <h1>the links</h1>
                 <div class="links">

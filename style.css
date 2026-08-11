@@ -13,15 +13,19 @@
     /* Dark grey */
 
     /* Type roles: Garamond for reading text, Philosopher for headings and
-       section labels, Azeret for the deliberate monospace accents. */
+       section labels, Azeret for the deliberate monospace accents, Long Cang
+       for the Chinese beside the portrait. */
     --font-body: 'EB Garamond', Georgia, serif;
     --font-heading: 'Philosopher', sans-serif;
     --font-mono: 'Azeret Mono', monospace;
+    --font-hanzi: 'Long Cang', serif;
 
     /* 22.4px. Garamond has a small x-height and reads smaller than Philosopher
        at the same size, so the reading text sits above the 20px the headings
        still use. */
     --font-size-body: 1.4rem;
+
+    --identity-scale: 1;
 
     /* Motion. One decelerating curve for everything that arrives, so the
        entrance and the content swaps read as the same gesture. */
@@ -59,6 +63,45 @@
     max-width: 34rem;
     margin-top: 10%;
     margin-left: 10px;
+}
+
+/* The portrait and the script column sit on one row so the writing runs
+   down the photograph's right edge; the name and pronunciation below then run
+   horizontally away from their foot, which is the corner the row makes with the
+   column under it. */
+.identity {
+    display: flex;
+    align-items: center;
+    /* Tight: each column's own line box already holds a little air on either
+       side of the ink, so the measured gap reads wider than it is. */
+    gap: 0.75rem;
+}
+
+.script-name {
+    /* Reset the button back to text. */
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+
+    line-height: 1;
+    writing-mode: vertical-rl;
+}
+
+.script-name:hover,
+.script-name:focus-visible {
+    color: var(--highlight-color);
+}
+
+.name-hanzi {
+    --hanzi-tracking: 0.14em;
+
+    font-family: var(--font-hanzi);
+    font-size: calc(2.64rem * var(--identity-scale));
+    letter-spacing: var(--hanzi-tracking);
+    color: color-mix(in srgb, var(--text-color) 65%, var(--background-color));
+    margin: 0 0 0 0.6rem;
 }
 
 /* create a style for the title text that has a custom font and size */
@@ -317,8 +360,8 @@
 }
 
 .profile-pic img {
-    width: 10rem;
-    height: 10rem;
+    width: calc(10rem * var(--identity-scale));
+    height: calc(10rem * var(--identity-scale));
     border-radius: 50%;
 }
 
@@ -431,5 +474,12 @@ body {
     .right {
         margin-top: 0;
         margin-left: 0;
+    }
+}
+
+/* The identity row can't wrap, and stops fitting the gutters just under 372px. */
+@media (max-width: 400px) {
+    :root {
+        --identity-scale: 0.8;
     }
 }
