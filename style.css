@@ -32,6 +32,8 @@
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --reveal-duration: 560ms;
     --reveal-stagger: 60ms;
+    /* Long enough to read as a hand crossing the column rather than a wipe. */
+    --write-duration: 1200ms;
     --reveal-distance: 12px;
     /* The fade-out before a swap is deliberately faster than the fade-in:
        leaving should feel dismissed, arriving should feel placed. */
@@ -115,6 +117,63 @@
     font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
+}
+
+/* Press it and the name writes itself on, top to bottom, the direction the
+   script is actually read and written in.
+
+   A gradient mask rather than an SVG stroke draw: these glyphs are filled brush
+   outlines, not centrelines, so dash-offsetting them would trace their edges
+   rather than travel along them. Sweeping a soft-edged mask down the column
+   moves ink onto the page in the order a hand would lay it down, and it works
+   on the live text — no second copy of the name to keep in sync.
+
+   The mask exists only while writing. At rest the element is unmasked, so a
+   fade edge parked near the end of the column can't shave the last stroke.
+
+   It lives on the inner span because the button carries the entrance animation:
+   setting `animation` on a [data-reveal] element and then unsetting it would
+   make the entrance replay every time the stroke finished.
+
+   105% is where the front has to reach for the fade edge behind it to have
+   cleared the last stroke — the ink ends at 96.5% of the span's box, and the
+   edge is 8% long. It is a percentage of the span, so it counts the 0.15em of
+   slack at the foot: as padding on the button that slack was outside the span
+   and the figure was 116%. Keeping 116% here would simply run the last tenth of
+   a second of the animation past a name that had finished writing.
+
+   That measurement was taken off the Manchu column, which is retired above. It
+   stays because it is the safe end of the range: the Chinese column's ink stops
+   short of 96.5%, so 105% clears it too, and the figure is already right for
+   the day the Manchu column comes back. */
+@property --ink-front {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 105%;
+}
+
+.script-name span {
+    display: block;
+}
+
+.script-name.is-writing span {
+    -webkit-mask-image: linear-gradient(to bottom,
+            #000 calc(var(--ink-front) - 8%), transparent var(--ink-front));
+    mask-image: linear-gradient(to bottom,
+            #000 calc(var(--ink-front) - 8%), transparent var(--ink-front));
+    animation: write-on var(--write-duration) linear;
+}
+
+/* Linear on purpose. --ease-out puts most of its travel in the first fifth,
+   which reads as a flash rather than a hand moving at a steady pace. */
+@keyframes write-on {
+    from {
+        --ink-front: 0%;
+    }
+
+    to {
+        --ink-front: 105%;
+    }
 }
 
 /* Philosopher ships 400 and 700 only, and h2 defaults to bold — so this is the
@@ -356,6 +415,15 @@
         --reveal-duration: 200ms;
         --reveal-stagger: 0ms;
         --reveal-distance: 0px;
+    }
+
+    /* The stroke is the whole point of the press, and there's no version of it
+       that isn't travel — so it doesn't get a reduced variant, it gets removed.
+       Hover still answers, which is enough to show the name is live. */
+    .script-name.is-writing span {
+        animation: none;
+        -webkit-mask-image: none;
+        mask-image: none;
     }
 }
 

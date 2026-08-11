@@ -205,6 +205,34 @@
             if (tab) show(tab.dataset.view);
         });
 
+        // Press a name and it writes itself on again. The class is stripped
+        // and re-added rather than just added, so a second press restarts the
+        // stroke instead of being swallowed by the one already running —
+        // reading offsetWidth in between is what forces the removal to land
+        // before the addition, rather than the two collapsing into no change.
+        //
+        // Per column rather than delegated from the row: each one owns its own
+        // is-writing, so pressing one mid-stroke doesn't restart the other, and
+        // any two can be writing at once. There is one column at the moment —
+        // the Manchu one is commented out in the markup above — but this loop
+        // is what lets it come back without touching the script.
+        document.querySelectorAll('.script-name').forEach(column => {
+            column.addEventListener('click', () => {
+                column.classList.remove('is-writing');
+                void column.offsetWidth;
+                column.classList.add('is-writing');
+            });
+
+            // Guarded by name because the entrance animation ends on these
+            // elements too, and clearing the class on that event would strip the
+            // mask from a stroke that hadn't started yet.
+            column.addEventListener('animationend', event => {
+                if (event.animationName === 'write-on') {
+                    column.classList.remove('is-writing');
+                }
+            });
+        });
+
         // Resolves once the webfonts have settled. This is the whole reason the
         // entrance waits: `display=swap` paints Georgia first and reflows to
         // Garamond a beat later, and hiding that reflow is most of what makes
