@@ -1,8 +1,8 @@
 :root {
     --text-color: white;
     --background-color: #1E1E1E;
-    --highlight-color: #FFD700;
-    --accent-color: #FF7B00;
+    --accent-color: #C75B3B;
+    --highlight-color: var(--accent-color);
     --grey-out: #808080;
     --shadow: #363636;
     --blog-max-width: 800px;

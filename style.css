@@ -3,10 +3,10 @@
     /* Dark gray */
     --background-color: #1E1E1E;
     /* Light gray */
-    --highlight-color: #FFD700;
-    /* Yellow */
-    --accent-color: #FF7B00;
-    /* Yellow */
+    --accent-color: #C75B3B;
+    /* Orange */
+    --highlight-color: var(--accent-color);
+    /* Hover/selected states, same orange as the accent */
     --grey-out: #808080;
     /* Grey */
     --shadow: #363636;
@@ -152,17 +152,8 @@
     /* For Internet Explorer */
 }
 
-/* The rule sits at the bottom of the line box, so its distance from the word is
-   the font's descent (7px for Garamond here) plus any padding — 10px in all.
-   Pulling the line box in tighter than the font's own height is the only way to
-   close that up; the padding-top puts back what the tighter line box took off
-   the ascent, so only the space below the word changes. */
 .selector .underlined {
     display: inline-block;
-    border-bottom: 3px solid var(--accent-color);
-    line-height: 1.16;
-    padding-top: 2px;
-    padding-bottom: 0;
 }
 
 .selector span {
@@ -226,7 +217,7 @@
 }
 
 .content .entry .number {
-    color: var(--grey-out);
+    color: var(--accent-color);
     font-family: var(--font-mono);
     font-size: 1.2rem;
     margin-top: 1%;
