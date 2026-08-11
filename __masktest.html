@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        @font-face {
+            font-family: 'Degede Uran';
+            src: url('http://localhost:8123/assets/fonts/degede-uran.woff2') format('woff2');
+            font-display: block;
+        }
+
+        body {
+            background: #1e1e1e;
+            margin: 0;
+        }
+
+        .name-script {
+            font-family: 'Degede Uran';
+            font-size: 72px;
+            line-height: 1;
+            writing-mode: vertical-rl;
+            text-orientation: sideways;
+            color: #b0b0b0;
+            margin: 40px;
+            display: inline-block;
+        }
+
+        /* The question: does a <mask> element in the document apply to HTML? */
+        .masked {
+            mask-image: url(#pen);
+            -webkit-mask-image: url(#pen);
+            mask-mode: alpha;
+        }
+
+        svg.defs {
+            position: absolute;
+            width: 0;
+            height: 0;
+        }
+
+        #penpath {
+            stroke-dasharray: 300;
+            stroke-dashoffset: 150;
+            /* half drawn */
+        }
+    </style>
+</head>
+
+<body>
+    <svg class="defs">
+        <!-- maskUnits/maskContentUnits in objectBoundingBox so the path is
+             expressed 0..1 across the masked element. -->
+        <mask id="pen" maskUnits="objectBoundingBox" maskContentUnits="objectBoundingBox">
+            <path id="penpath" d="M 0.5 0 L 0.5 1" stroke="#fff" stroke-width="4" fill="none"
+                pathLength="300" />
+        </mask>
+    </svg>
+
+    <div class="name-script masked"><span>Amba Aisinmo</span></div>
+    <div class="name-script"><span>Amba Aisinmo</span></div>
+</body>
+
+</html>
