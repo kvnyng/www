@@ -310,8 +310,8 @@
 
 /* Hover belongs to the link, not the line. The <p> is a block, so its :hover
    box ran the full width of the column and lit the row up from dead space
-   several inches away from the word. :has puts the ⇱ back in step with the
-   link it belongs to without widening the target that triggers it. */
+   several inches away from the word. :has puts the leading dash back in step
+   with the link it belongs to without widening the target that triggers it. */
 .socials .links a:hover,
 .socials .links p:has(a:hover) {
     color: var(--highlight-color);
