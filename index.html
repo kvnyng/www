@@ -37,6 +37,18 @@
          file holding those three glyphs and nothing else — 2.2kB. -->
     <link href="https://fonts.googleapis.com/css2?family=Long+Cang&text=%E6%9D%A8%E6%B3%93%E9%94%B4&display=swap"
         rel="stylesheet">
+    <!-- Retired with the Manchu column in the body: nothing renders in this
+         face now, so a live preload would pull 30kB down for no one. Left here,
+         commented, beside its @font-face and its styles in the stylesheet.
+
+         Preloaded, unlike the Google faces above: a font is otherwise only
+         fetched once layout reaches text that uses it, which can land after
+         document.fonts.ready has already settled. The entrance waits on that
+         promise, so losing the race means the name paints in the fallback and
+         then re-lays out. Starting the fetch here closes it.
+
+         <link rel="preload" href="assets/fonts/degede-uran.woff2" as="font" type="font/woff2" crossorigin>
+    -->
     <link rel="stylesheet" href="style.css">
 
     <!-- Inline and synchronous on purpose: this has to land before the first
@@ -87,6 +99,19 @@
                     aria-label="Yang Hongkai, written in Chinese — press to write it again">
                     <span lang="zh-Hans">杨泓锴</span>
                 </button>
+                <!-- Retired: the same name a second time, in Manchu, in its own
+                     column beside the Chinese one. It carried the same
+                     --reveal-order as the column above — the same name written
+                     twice, so the two arrived together rather than one chasing
+                     the other across the gap. Its styles, the face it was
+                     written in and that face's preload are commented out
+                     alongside it; nothing else has to change to bring it back.
+
+                     <button class="script-name name-script" type="button" data-reveal style="--reveal-order: 1"
+                         aria-label="Amba Aisinmo, written in Manchu script — press to write it again">
+                         <span>Amba Aisinmo</span>
+                     </button>
+                -->
             </div>
             <h1 class="title" data-reveal style="--reveal-order: 2">KEVIN YANG</h1>
             <h2 class="subtitle" data-reveal style="--reveal-order: 3">/kɛvɪn/ • /yaŋ/</h2>

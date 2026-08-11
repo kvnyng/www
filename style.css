@@ -1,3 +1,26 @@
+/* Retired along with the Manchu column further down — nothing else on the page
+   asks for this face, so a live @font-face would only be a rule the parser
+   walks past for no one. Kept rather than deleted, with the notes that explain
+   it, for whenever the column comes back; the <link rel="preload"> in the head
+   is commented out to match. The two prose paragraphs are hoisted out of the
+   block below because CSS comments don't nest.
+
+   Self-hosted rather than linked with the others: degede_uran isn't on Google
+   Fonts, and it's 30kB, so it costs less than the extra connection would.
+
+   block, not swap. The fallback here isn't a near-miss of the same shapes,
+   it's a different alphabet at a different size, so swapping it in and back
+   out is a visible resize rather than a reflow. The entrance already waits
+   on document.fonts.ready and the preload starts the fetch at parse time,
+   so the block period is over long before anything is painted. */
+/*
+@font-face {
+    font-family: 'Degede Uran';
+    src: url('assets/fonts/degede-uran.woff2') format('woff2');
+    font-display: block;
+}
+*/
+
 :root {
     --text-color: white;
     /* Dark gray */
@@ -14,10 +37,12 @@
 
     /* Type roles: Garamond for reading text, Philosopher for headings and
        section labels, Azeret for the deliberate monospace accents, Long Cang
-       for the Chinese beside the portrait. */
+       for the Chinese beside the portrait. --font-script was Degede Uran for
+       the Manchu column, retired with it. */
     --font-body: 'EB Garamond', Georgia, serif;
     --font-heading: 'Philosopher', sans-serif;
     --font-mono: 'Azeret Mono', monospace;
+    /* --font-script: 'Degede Uran', var(--font-heading); */
     --font-hanzi: 'Long Cang', serif;
 
     /* 22.4px. Garamond has a small x-height and reads smaller than Philosopher
@@ -118,6 +143,68 @@
     font-size: 1.25rem;
     margin-top: 1%;
 }
+
+/* ── Retired: the Manchu column ─────────────────────────────────────────────
+   The name a second time, in Manchu, in its own column beside the Chinese one.
+   Commented out rather than deleted — the markup in index.html, the @font-face
+   at the top of this file and the preload in the head are all commented out
+   with it, so putting it back is four uncommentings and nothing else. The
+   machinery the two columns shared (.script-name, --ink-front, write-on, the
+   reduced-motion opt-out) is still live: it belongs to the Chinese column too.
+
+   The name again, in Manchu, running down the portrait's right edge.
+   degede_uran is a legacy display font: it carries no Mongolian codepoints, only
+   ASCII, and its glyphs are drawn lying on their side. So the markup holds the
+   romanisation — "Amba Aisinmo" — and the two properties below do the rest.
+   `vertical-rl` stacks the letters top-to-bottom, the way the script is read,
+   and `sideways` turns each glyph a quarter turn to stand it upright. Letters
+   are meant to overlap into a continuous stroke, so no letter-spacing.
+
+   If the font never loads, the romanisation shows instead, which is the honest
+   fallback — the same name, just in the alphabet the rest of the page uses.
+
+   Secondary to the name, but a step brighter than --grey-out: these are hairline
+   brush strokes rather than solid letterforms, so at the same value they'd read
+   as fainter than the links do. The mix is an optical correction, not a new
+   colour — it stays on the two tokens the rest of the page is built from. */
+/*
+.name-script {
+    font-family: var(--font-script);
+    font-size: calc(4.5rem * var(--identity-scale));
+    text-orientation: sideways;
+    color: color-mix(in srgb, var(--text-color) 65%, var(--background-color));
+    margin: 0 0 0 -0.8rem;
+}
+*/
+
+/* Measured off this exact string rather than the font's worst case: the ink
+   runs 1.687em against an advance of 1.629em, starting 0.044em inside the line
+   and finishing 0.102em past its end. So all the slack it needs is at the foot
+   — and 0.15em rather than 0.102em, because that is the figure that also drops
+   the ink's midpoint onto the box's. `align-items: center` on the row then
+   centres the strokes you can see rather than the metrics box they nominally
+   sit in, which are half a stroke apart.
+
+   The slack is an empty inline-block at the end of the run rather than padding
+   on the button, because it has a second job: it has to lengthen the *line*,
+   not just the box around it. A hover repaints the line box, and a glyph that
+   overhangs it is left holding the colour it had — so with the slack as
+   padding, the last stroke of the tail stayed grey while everything above it
+   went orange. Sitting inside the line, the same 0.15em pulls the line's end
+   past the ink and the whole name recolours at once. The button's box is the
+   size it always was: the slack only moved from outside the line to inside it.
+
+   `inline-size` because the inline axis here runs down the column — this is the
+   foot of the line, not its right-hand edge. */
+/*
+.name-script span::after {
+    content: "";
+    display: inline-block;
+    inline-size: 0.15em;
+    block-size: 0;
+}
+*/
+/* ── end of the retired Manchu column ─────────────────────────────────────── */
 
 /* Press it and the name writes itself on, top to bottom, the direction the
    script is actually read and written in.
