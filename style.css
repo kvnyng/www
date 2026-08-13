@@ -393,13 +393,17 @@
 }
 
 .content .entry {
-    margin-top: 1%;
-    padding-top: 1%;
+    margin-top: 0.8%;
+    padding-top: 0.8%;
     word-wrap: break-word;
 }
 
+/* The gap between entries is this margin, not the .entry box: with no bottom
+   padding or border on .entry, the paragraph's bottom margin collapses out
+   through it and, at 1.4rem body text, outweighs the entry's own top margin. */
 .content .entry p {
     line-height: 1.25;
+    margin-bottom: 0.8em;
 }
 
 .content .entry .number {
