@@ -220,8 +220,30 @@
             return cache.get(name);
         }
 
+        // A link out of the site opens in a tab of its own, so the view the
+        // reader was on is still sitting here when they come back.
+        //
+        // Done from script rather than written into the fragments so it holds
+        // for every link the views ever carry, and run per paint rather than
+        // once at load: the fragments arrive by fetch, well after
+        // DOMContentLoaded, and again on every swap — there is no single moment
+        // when all of the links exist.
+        //
+        // The hostname is compared rather than searched for inside the href, so
+        // a host that merely contains this one's name isn't taken for it. rel
+        // beside target because the opened tab otherwise keeps a live
+        // window.opener handle back to this page.
+        function sendExternalLinksToNewTab(root) {
+            root.querySelectorAll('a[href^="http"]').forEach(link => {
+                if (link.hostname === location.hostname) return;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            });
+        }
+
         function paint(html) {
             content.innerHTML = html;
+            sendExternalLinksToNewTab(content);
             // Number the entries so the stagger in CSS doesn't need to know how
             // many there are.
             content.querySelectorAll('.entry').forEach((entry, i) => {
