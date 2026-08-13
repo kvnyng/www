@@ -49,6 +49,17 @@
 
          <link rel="preload" href="assets/fonts/degede-uran.woff2" as="font" type="font/woff2" crossorigin>
     -->
+    <!-- The seal stamps are CSS mask-images, and a mask's fetch doesn't start
+         until the stylesheet has been parsed and applied. These start the
+         three downloads at parse time instead, alongside style.css. -->
+    <link rel="preload" href="assets/icons/github.svg" as="image" type="image/svg+xml">
+    <link rel="preload" href="assets/icons/linkedin.svg" as="image" type="image/svg+xml">
+    <link rel="preload" href="assets/icons/twitter.svg" as="image" type="image/svg+xml">
+    <!-- The -carve variants only appear on hover; fetched here so the first
+         hover doesn't spend its moment waiting on the network. -->
+    <link rel="preload" href="assets/icons/github-carve.svg" as="image" type="image/svg+xml">
+    <link rel="preload" href="assets/icons/linkedin-carve.svg" as="image" type="image/svg+xml">
+    <link rel="preload" href="assets/icons/twitter-carve.svg" as="image" type="image/svg+xml">
     <link rel="stylesheet" href="style.css">
 
     <!-- Inline and synchronous on purpose: this has to land before the first
@@ -118,11 +129,29 @@
             <h2 class="subtitle motto" data-reveal style="--reveal-order: 4">crafting delight</h2>
             <p class="tagline" data-reveal style="--reveal-order: 5">@harvard @csail @neo <br>@contrary</p>
             <div class="socials" data-reveal style="--reveal-order: 6">
-                <h1>the links</h1>
+                <!-- A dash where a heading used to be: the stamps say what
+                     they are, so the section only needs separating from the
+                     tagline above, not naming. aria-hidden because it's
+                     punctuation — the links carry their own labels. -->
+                <p class="dash" aria-hidden="true">—</p>
+                <!-- The links, pressed rather than listed: each one a seal
+                     impression traced from stamp artwork (potrace over the
+                     source PNGs, one ink bounding box and margin across the
+                     three, so they sit as a matched set). The files carve the
+                     ink only — the paper was left untraced, so the page's
+                     ground shows through as the ink-free carving.
+
+                     The anchors are empty on purpose: the stamps are applied
+                     as CSS masks over the accent token, so the drawing lives
+                     in the stylesheet and the accessible name in aria-label
+                     is all the content there is. -->
                 <div class="links">
-                    <p>- <a href="https://github.com/kvnyng" target="_blank">Github</a></p>
-                    <p>- <a href="https://linkedin.com/in/kvnyng" target="_blank">LinkedIn</a></p>
-                    <p>- <a href="https://twitter.com/kineticyang" target="_blank">Twitter</a></p>
+                    <a class="seal seal-github" href="https://github.com/kvnyng" target="_blank"
+                        rel="noopener noreferrer" aria-label="Github"></a>
+                    <a class="seal seal-linkedin" href="https://linkedin.com/in/kvnyng" target="_blank"
+                        rel="noopener noreferrer" aria-label="LinkedIn"></a>
+                    <a class="seal seal-twitter" href="https://twitter.com/kineticyang" target="_blank"
+                        rel="noopener noreferrer" aria-label="Twitter"></a>
                 </div>
             </div>
         </div>

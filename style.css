@@ -286,40 +286,100 @@
     margin-bottom: 1%;
 }
 
-.socials h1 {
-    color: var(--text-color);
-    font-family: var(--font-heading);
-    font-weight: 400;
-    font-size: 1.25rem;
+/* Structure, not content: the dash sits at the separator grey rather than
+   reading white, so it marks the section break without asking to be read. */
+.socials .dash {
+    color: var(--grey-out);
+    font-size: var(--font-size-body);
     margin-top: 1%;
     margin-bottom: 1%;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .socials .links {
-    margin-top: 2%;
-    color: var(--grey-out);
-    margin-right: 1rem;
-    font-size: var(--font-size-body);
+    margin-top: 0.6rem;
+    display: flex;
+    gap: 0.9rem;
 }
 
-/* The leading dash is list punctuation, not part of the link: it stays at
-   reading white and sits out the hover, so only the word itself lights up. */
-.socials .links p {
-    margin-top: 1%;
-    margin-bottom: 1%;
-    color: var(--text-color)
+/* The stamp files are used as masks rather than as images: the SVG's alpha is
+   the impression, and the colour underneath it is plain background on this
+   element. That keeps the cinnabar on the accent token — the files carry a
+   baked-in fill for standalone viewing, but nothing on the page depends on
+   it, and a palette change here recolours all three at once. */
+.seal {
+    display: block;
+    width: 2.4rem;
+    height: 2.4rem;
+    background: var(--accent-color);
+    -webkit-mask-image: var(--stamp);
+    mask-image: var(--stamp);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
 }
 
-.socials .links a:hover {
-    color: var(--highlight-color);
+/* The files live in custom properties so the hover state below can swap
+   them without naming each stamp a second time. --stamp-carve is the
+   impression's interior whitespace — everything inside the block's footprint
+   that the ink is not — subtracted from the same bitmap before tracing, so
+   its edges land exactly where the ink's do. */
+.seal-github {
+    --stamp: url('assets/icons/github.svg');
+    --stamp-carve: url('assets/icons/github-carve.svg');
 }
 
-.socials .links a {
-    color: var(--grey-out);
-    margin-right: 1rem;
-    font-size: var(--font-size-body);
-    text-decoration: none;
-    display: inline-block;
+.seal-linkedin {
+    --stamp: url('assets/icons/linkedin.svg');
+    --stamp-carve: url('assets/icons/linkedin-carve.svg');
+}
+
+.seal-twitter {
+    --stamp: url('assets/icons/twitter.svg');
+    --stamp-carve: url('assets/icons/twitter-carve.svg');
+}
+
+/* No two impressions land square: each chop sits a hair off axis, and
+   differently from its neighbours. `rotate` the property, not transform —
+   it composes with the :active nudge below instead of overwriting it. */
+.seal:nth-child(1) {
+    rotate: -2deg;
+}
+
+.seal:nth-child(2) {
+    rotate: 1.5deg;
+}
+
+.seal:nth-child(3) {
+    rotate: -1deg;
+}
+
+/* Hover swaps figure and ground: the intaglio impression becomes its relief
+   counterpart — what was ink goes dark, what was carved fills with cinnabar,
+   and the inversion stops at the stamp's own rough contour, so the bare
+   corners of the box stay bare. A single pre-cut file rather than a live
+   composite of stamp against its footprint: two separate traces never agree
+   about an edge to the pixel, and the disagreement glowed as a hairline rim
+   around the block. The subtraction is done in the bitmap, where it's exact,
+   and traced once. */
+.seal:hover,
+.seal:focus-visible {
+    -webkit-mask-image: var(--stamp-carve);
+    mask-image: var(--stamp-carve);
+}
+
+.seal:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 3px;
+}
+
+/* Pressed again: the stamp gives by a pixel. */
+.seal:active {
+    translate: 0 1px;
 }
 
 .selector {
