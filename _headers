@@ -1,6 +1,7 @@
 # Cache rules for the Pages deploy. Read by Cloudflare from the root of what
 # gets published; the site has no build step, so this file's home is the repo
-# root and nothing has to copy it anywhere.
+# root and nothing has to copy it anywhere. The file itself is consumed at
+# deploy time and never served.
 #
 # The default was giving style.css `public, max-age=14400` while index.html got
 # `max-age=0, must-revalidate`. That pairing is the worst of both: the browser
@@ -11,10 +12,21 @@
 # max-age=0 is a revalidation, not a re-download — the browser still sends the
 # ETag and still gets a 304 with an empty body when nothing changed. What it
 # buys is that a change is never more than one round trip away. On 36kB of CSS
-# and 20kB of JS that trip is not worth defending.
+# and 20kB of JS that trip is not worth defending. Images and fonts keep the
+# long default: they are replaced by adding a file, not by editing one.
+#
+# Spelled out a path at a time rather than as /*.css — Pages matches a splat as
+# a trailing wildcard, so an extension pattern quietly matches nothing and the
+# rule looks applied while doing nothing at all. There are four such files.
 
-/*.css
+/style.css
   cache-control: public, max-age=0, must-revalidate
 
-/*.js
+/main.js
+  cache-control: public, max-age=0, must-revalidate
+
+/blog/style.css
+  cache-control: public, max-age=0, must-revalidate
+
+/blog/main.js
   cache-control: public, max-age=0, must-revalidate
