@@ -187,10 +187,14 @@
     margin-bottom: 1%;
 }
 
+/* Greyed — the name is the claim, the pronunciation is a footnote to it. The
+   same mix as the hanzi column, not --grey-out: the pronunciation is the
+   name's other voice, and the two should be the one ink. */
 .subtitle {
     font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
+    color: color-mix(in srgb, var(--text-color) 65%, var(--background-color));
 }
 
 /* ── Retired: the Manchu column ─────────────────────────────────────────────
@@ -475,17 +479,18 @@
     }
 }
 
-/* The motto stands in a rule of its own rather than riding .subtitle — it is a
-   claim under the name, not a second pronunciation, and it wants to be dressed
-   apart from one. Philosopher ships 400 and 700 only, and h2 defaults to bold
-   — 400 is the one step down, so the line still reads under the name rather
-   than beside it. Size and margin carried over from .subtitle so leaving that
-   class moved nothing on the page. */
+/* A claim, not a footnote — the motto stands in a rule of its own rather than
+   riding .subtitle, and it stays at full text colour while the pronunciation
+   above it greys into the quiet layer. Philosopher ships 400 and 700 only, and
+   h2 defaults to bold — 400 is the one step down, so the line still reads
+   under the name rather than beside it. Size and margin carried over from
+   .subtitle so leaving that class moved nothing but the colour. */
 .motto {
     font-family: var(--font-heading);
     font-size: 1.25rem;
     margin-top: 1%;
     font-weight: 400;
+    color: var(--text-color);
 }
 
 .tagline {
