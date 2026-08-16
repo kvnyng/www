@@ -481,13 +481,18 @@
 
 /* A claim, not a footnote — the motto stands in a rule of its own rather than
    riding .subtitle, and it stays at full text colour while the pronunciation
-   above it greys into the quiet layer. Philosopher ships 400 and 700 only, and
-   h2 defaults to bold — 400 is the one step down, so the line still reads
-   under the name rather than beside it. Size and margin carried over from
-   .subtitle so leaving that class moved nothing but the colour. */
+   above it greys into the quiet layer.
+
+   Garamond, not Philosopher: the motto is a sentence to be read, not a label
+   over a section, so it belongs to the reading voice the tagline beneath it
+   already speaks in. That brings --font-size-body with it — Garamond's small
+   x-height reads smaller than Philosopher at the same size, so holding the
+   headings' 1.25rem would have shrunk the line rather than only re-cut it.
+   Still 400, because h2 arrives bold from the UA and the motto reads under
+   the name rather than beside it. */
 .motto {
-    font-family: var(--font-heading);
-    font-size: 1.25rem;
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
     margin-top: 1%;
     font-weight: 400;
     color: var(--text-color);
