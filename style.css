@@ -59,6 +59,13 @@
     --reveal-stagger: 60ms;
     /* Long enough to read as a hand crossing the column rather than a wipe. */
     --write-duration: 1200ms;
+    /* The Chinese column is not one pass but twenty-eight, and it has three
+       characters to get through. Given the figure above, a stroke would be over
+       in forty milliseconds and the name would arrive as a flicker; this is
+       nearer the three to five seconds the same three characters take by hand.
+       The two are separate tokens because they measure different things — a
+       front crossing a column, and a hand writing a name. */
+    --hanzi-write-duration: 3000ms;
     --reveal-distance: 12px;
     /* The fade-out before a swap is deliberately faster than the fade-in:
        leaving should feel dismissed, arriving should feel placed. */
@@ -121,14 +128,56 @@
     color: var(--highlight-color);
 }
 
+/* The three characters are no longer set as text but drawn as outlines, so most
+   of what used to shape this column has moved into the SVG. font-size stays,
+   and carries everything: the drawing is sized in em, so the column still
+   scales with --identity-scale and still measures one em across. The tracking
+   is now the gap between em boxes inside the generated viewBox — the token is
+   kept as the record of the figure, and __strokes/build.mjs mirrors it.
+   font-family stays too: Long Cang is what the outlines were traced from, and
+   the hidden name should be spoken and searched as the same face it was drawn
+   in. */
 .name-hanzi {
     --hanzi-tracking: 0.14em;
 
     font-family: var(--font-hanzi);
     font-size: calc(2.64rem * var(--identity-scale));
-    letter-spacing: var(--hanzi-tracking);
     color: color-mix(in srgb, var(--text-color) 65%, var(--background-color));
     margin: 0 0 0 0.6rem;
+}
+
+/* One em wide, because that is what a full-width character is, and as tall as
+   the generated viewBox says the column of three is — the ratio is baked in
+   beside the viewBox rather than written here, so the two cannot drift.
+
+   Both axes are stated rather than left to the SVG's own aspect ratio: intrinsic
+   sizing from a viewBox is the sort of thing browsers have historically differed
+   on, and a column that letterboxes itself would take the name with it.
+
+   display: block, so the drawing isn't a line of text with a baseline and the
+   descender's worth of air that comes with one. */
+.hanzi-strokes {
+    display: block;
+    width: 1em;
+    height: calc(1em * var(--hz-aspect));
+}
+
+/* Hidden from the eye, not from the machine. display: none and visibility:
+   hidden would take the name out of the accessibility tree along with the
+   layout, and the tree is the one place it is still needed; clipped to a pixel
+   it is out of sight and still, to anything reading the page, text. Absolutely
+   positioned so the button's box is the drawing's size and nothing else. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* create a style for the title text that has a custom font and size */
@@ -206,14 +255,22 @@
 */
 /* ── end of the retired Manchu column ─────────────────────────────────────── */
 
-/* Press it and the name writes itself on, top to bottom, the direction the
-   script is actually read and written in.
+/* Press a name and it writes itself on, top to bottom, the direction both of
+   these scripts are read and written in. There are two ways of doing that here,
+   and which one a column gets comes down to how its letters are joined.
 
-   A gradient mask rather than an SVG stroke draw: these glyphs are filled brush
-   outlines, not centrelines, so dash-offsetting them would trace their edges
-   rather than travel along them. Sweeping a soft-edged mask down the column
-   moves ink onto the page in the order a hand would lay it down, and it works
-   on the live text — no second copy of the name to keep in sync.
+   This is the cheaper one, and what is left of it belongs to the Manchu column.
+   Sweep a soft-edged mask down the live text: no second copy of the name to keep
+   in sync, nothing to regenerate when the type changes, and for a script whose
+   letters run into one continuous stroke it is honest enough — the front travels
+   the way the hand did. What a single front cannot do is lift the pen. Passed
+   down a Chinese character it crosses every stroke it meets at the same moment,
+   which is the whole reason the column below draws its strokes one at a time
+   instead.
+
+   Scoped to .name-script rather than .script-name for the same reason: run on
+   the Chinese column it would put a wipe over a name that is already writing
+   itself properly, and end write-on early enough to strip the class mid-stroke.
 
    The mask exists only while writing. At rest the element is unmasked, so a
    fade edge parked near the end of the column can't shave the last stroke.
@@ -229,10 +286,9 @@
    and the figure was 116%. Keeping 116% here would simply run the last tenth of
    a second of the animation past a name that had finished writing.
 
-   That measurement was taken off the Manchu column, which is retired above. It
-   stays because it is the safe end of the range: the Chinese column's ink stops
-   short of 96.5%, so 105% clears it too, and the figure is already right for
-   the day the Manchu column comes back. */
+   That measurement was taken off the Manchu column, which is retired above, and
+   the figure stays with it — right for the day the column comes back, and asked
+   for by nothing else in the meantime. */
 @property --ink-front {
     syntax: '<percentage>';
     inherits: false;
@@ -243,7 +299,7 @@
     display: block;
 }
 
-.script-name.is-writing span {
+.name-script.is-writing span {
     -webkit-mask-image: linear-gradient(to bottom,
             #000 calc(var(--ink-front) - 8%), transparent var(--ink-front));
     mask-image: linear-gradient(to bottom,
@@ -260,6 +316,162 @@
 
     to {
         --ink-front: 105%;
+    }
+}
+
+/* ── The Chinese column, a stroke at a time ─────────────────────────────────
+   What is drawn is Long Cang's own outlines, and an outline is the edge of a
+   stroke rather than the stroke itself — dash it on and the ink would crawl
+   around each character's perimeter instead of travelling down it. So the
+   drawing never moves. What moves is a mask over it: one white line per stroke,
+   laid along the stroke's centre at a width fat enough to cover its ink, dashed
+   out of sight and then pulled back in. Wherever the mask has been, the outline
+   shows. (The technique is Hanzi Writer's. The centrelines were fitted to this
+   face by hand — a cursive brush puts its strokes nowhere a printed skeleton
+   would expect them.)
+
+   Three things per stroke are baked into the markup by __strokes/build.mjs, all
+   because CSS cannot measure them: the true length of its centreline, the two
+   fractions saying where in the write it falls, and the curve it is drawn
+   along. SVG's own pathLength would have covered the first, and is avoided
+   deliberately — Safari has a long history of scaling it wrongly, and a stroke
+   that draws to 97 percent of itself is a stroke that never lands. The
+   fractions are unitless, so the pace of the whole name stays in the one token
+   at the top of this file.
+
+   Time is spent the way a hand spends it, and a hand spends it in three
+   currencies. Along a stroke, by curvature: the nib slows into a bend and runs
+   on the straights, which is the two-thirds power law every arm obeys without
+   being told to. At the ends, by what the nib is doing: a blunt terminal is a
+   press, so the stroke settles into its start and brakes to its stop, while a
+   terminal that thins to a needle is a whip, still speeding up as it leaves the
+   paper — which end is which is read off the ink itself, not guessed. And
+   between strokes, by reach, so the drop to the next character reads as a
+   reach and the step to the stroke beside it doesn't — with a floor under it,
+   because two short strokes in a row with nothing between them is a machine
+   firing, not a hand moving. */
+
+/* The mask exists only while writing. At rest the outlines are unmasked — the
+   same constraint the wipe above is held to, and here for a blunter reason. A
+   pen is a fat round line laid down the middle of a stroke, and between them the
+   pens cover 97.7 to 99.4 percent of the ink they are drawn over. That is ample
+   to write with and nowhere near enough to be left in place: parked on a
+   finished name, the last fraction of a percent reads as nicks bitten out of the
+   edges, exactly where the ink runs furthest from any centreline. What makes the
+   removal invisible rather than merely correct is that by then the pens are not
+   alone in there: each mask has already opened itself the rest of the way (see
+   the settle below), so this rule takes away a mask that was no longer taking
+   anything.
+
+   Written as :not(.is-writing) rather than as a masked-while-writing rule
+   because the mask is a per-character url() sitting on the markup, and CSS
+   cannot hand back what it has taken away. Having no rule that applies is the
+   only way to restore it — so the rest state is the one that carries the
+   declaration, and pressing the name simply stops overriding the attribute.
+
+   The selector is structural because the pens live inside the <mask> and the
+   outlines are the only path children of the groups; nothing has to be named in
+   the generated markup for this to be exact. */
+.name-hanzi:not(.is-writing) .hanzi-strokes > g > path {
+    mask: none;
+}
+
+/* At rest the name is simply written, which is also what anyone with the script
+   blocked gets: the dash exists only for the length of a press. */
+.name-hanzi .hz-pen {
+    stroke-dashoffset: 0;
+}
+
+/* forwards, so a stroke that has been written stays written until the run ends.
+   Nothing backwards: a stroke waiting for its delay to elapse is already sitting
+   at the offset this rule gives it, which is off the page.
+
+   The timing function is the stroke's own, and it is a longhand on purpose: the
+   shorthand above resets it, so it has to be said afterwards or the linear in
+   the shorthand wins. What arrives in --hz-ease is a CSS linear() with a dozen
+   to two dozen stops, sampled by the build off the velocity model — the shape
+   of one stroke's spend, ready-made, in the only form a stylesheet can hold a
+   curve that isn't a cubic. Engines that don't know linear() (before Chrome
+   113, Firefox 112, Safari 17.2) can't parse the substituted value and fall
+   back to the property's initial ease rather than to the linear beside it —
+   a gentler pace than intended, on the same schedule, in browsers that are
+   already several years past. */
+.name-hanzi.is-writing .hz-pen {
+    stroke-dashoffset: var(--hz-len);
+    animation: hz-draw calc(var(--hanzi-write-duration) * var(--hz-dt)) linear
+        calc(var(--hanzi-write-duration) * var(--hz-t0)) forwards;
+    animation-timing-function: var(--hz-ease, linear);
+}
+
+/* Twenty-eight strokes end twenty-eight animations and the button hears every
+   one of them. The last stroke of 锴 runs the same keyframes under a name of its
+   own, so the script has a single unmistakable end of the write to listen for
+   rather than a tally to keep. */
+.name-hanzi.is-writing .hz-last {
+    animation-name: hz-write-on;
+}
+
+/* Two endpoints and nothing in between, because the pace lives in the timing
+   function rather than here. Twenty-eight strokes want twenty-eight different
+   spends, and a keyframe list can only be written once — where an easing can be
+   handed to each pen through a custom property. */
+@keyframes hz-draw {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes hz-write-on {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* The last thing in each mask, and the reason taking the mask off is not an
+   event: white over the whole em box, fading up over the pens once the character
+   is finished, until the mask is holding nothing back at all. Where the pens have
+   been it changes nothing — white over white — so all it can do is fill in the
+   slivers they could not reach and put back the fraction of a pixel their own
+   soft edges bit out of the outline's. Nothing appears that the character does
+   not already contain: a mask can only ever subtract, and there is no ink in the
+   box but this character's.
+
+   A copy of the glyph is the obvious thing to open a mask with and it is the
+   wrong one, which the pixels will tell you: its edge is antialiased like any
+   other, so every contour ends up multiplied by a second soft copy of itself and
+   the name still gains weight the moment the mask leaves. The only shape that
+   leaves the outline exactly as it was drawn is one that has no opinion about
+   where the ink is.
+
+   Each window is placed by the build: for the first two characters it opens as
+   the last stroke lands and rides the lift and the breath into the next one,
+   where there is other motion to look at. The last character has nothing after it
+   to hide in, so its window is pushed back against the end of the write instead —
+   as far back as the nib landing on the final stroke and no further, because a
+   mask that opens over a stroke nobody has written yet puts it on the page as a
+   grey bar waiting for the brush, which is a worse thing to have fixed than the
+   flash. What it buys is that by the moment the class comes off, the mask is
+   already open.
+
+   No resting declaration, because at rest there is no mask for it to be part of.
+   Only the writing state has anything to say about it, and what it says first is
+   0: the animation fills forwards but not backwards, so a fill still waiting for
+   its delay sits at the value this rule gives it — invisible — and a press that
+   restarts the write puts every one of them back there.
+
+   Nothing here may end the write. The button listens for one animation by name
+   and these are not it; the last of them is timed to land on the same beat as
+   hz-write-on rather than after it, so whichever order the engine chooses to
+   deliver the two, the pixels are the same either way. */
+.name-hanzi.is-writing .hz-fill {
+    opacity: 0;
+    animation: hz-settle calc(var(--hanzi-write-duration) * var(--hz-dt)) linear
+        calc(var(--hanzi-write-duration) * var(--hz-t0)) forwards;
+}
+
+@keyframes hz-settle {
+    to {
+        opacity: 1;
     }
 }
 
@@ -568,10 +780,37 @@
     /* The stroke is the whole point of the press, and there's no version of it
        that isn't travel — so it doesn't get a reduced variant, it gets removed.
        Hover still answers, which is enough to show the name is live. */
-    .script-name.is-writing span {
+    .name-script.is-writing span {
         animation: none;
         -webkit-mask-image: none;
         mask-image: none;
+    }
+
+    /* Same philosophy for the Chinese column, and the dash has to be put back as
+       well as the animation taken away: a pen left at its own length is a stroke
+       held off the page, and with nothing running to bring it back the name would
+       press down to a blank column. */
+    .name-hanzi.is-writing .hz-pen {
+        animation: none;
+        stroke-dashoffset: 0;
+    }
+
+    /* And nothing left in the masks to fade either. There is no mask here to be
+       part of, so this is bookkeeping rather than appearance: with the strokes
+       gone a press starts nothing at all, which is what the paragraph below
+       depends on. */
+    .name-hanzi.is-writing .hz-fill {
+        animation: none;
+        opacity: 1;
+    }
+
+    /* is-writing is cleared by the end of an animation, and there are none left
+       to end — so here a press puts the class on and nothing ever takes it off.
+       Unmasking has to stop asking whether the name is writing and simply be
+       true: otherwise that one lingering class would park the pens' missing
+       couple of percent on the resting outlines for the rest of the visit. */
+    .name-hanzi .hanzi-strokes > g > path {
+        mask: none;
     }
 }
 
