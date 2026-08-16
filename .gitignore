@@ -1,2 +1,9 @@
 .venv
 .DS_Store
+
+# Regenerable stroke-pipeline artifacts; the scripts, data and fitted
+# medians in __strokes/ are the source of truth and stay tracked. The
+# font comes back with `bun fetch.mjs`, the rest with the build scripts.
+__strokes/node_modules/
+__strokes/out/
+__strokes/vendor/

@@ -1,0 +1,36 @@
+{
+  "note": "Manifest: codepoint <-> char <-> filenames. Filenames are ASCII-safe (u<HEX>) so nothing depends on shell/FS unicode handling.",
+  "name": "杨泓锴",
+  "chars": [
+    {
+      "char": "杨",
+      "codepoint": "U+6768",
+      "cp": 26472,
+      "file": "u6768",
+      "data": "data/u6768.json",
+      "seed": "out/seed/u6768.json",
+      "fit": "fit/u6768.json",
+      "expectedStrokes": 7
+    },
+    {
+      "char": "泓",
+      "codepoint": "U+6CD3",
+      "cp": 27859,
+      "file": "u6CD3",
+      "data": "data/u6CD3.json",
+      "seed": "out/seed/u6CD3.json",
+      "fit": "fit/u6CD3.json",
+      "expectedStrokes": 8
+    },
+    {
+      "char": "锴",
+      "codepoint": "U+9534",
+      "cp": 38196,
+      "file": "u9534",
+      "data": "data/u9534.json",
+      "seed": "out/seed/u9534.json",
+      "fit": "fit/u9534.json",
+      "expectedStrokes": 14
+    }
+  ]
+}
