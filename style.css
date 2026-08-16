@@ -475,11 +475,16 @@
     }
 }
 
-/* Philosopher ships 400 and 700 only, and h2 defaults to bold — so this is the
-   one step down available. Lighter than the pronunciation above it on purpose:
-   same size, less weight, so the two lines read in order rather than as a pair
-   of equal claims. */
+/* The motto stands in a rule of its own rather than riding .subtitle — it is a
+   claim under the name, not a second pronunciation, and it wants to be dressed
+   apart from one. Philosopher ships 400 and 700 only, and h2 defaults to bold
+   — 400 is the one step down, so the line still reads under the name rather
+   than beside it. Size and margin carried over from .subtitle so leaving that
+   class moved nothing on the page. */
 .motto {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    margin-top: 1%;
     font-weight: 400;
 }
 
