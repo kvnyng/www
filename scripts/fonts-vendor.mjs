@@ -6,9 +6,10 @@
    render today goes missing tomorrow.
 
    Re-run it to pick up new font versions: `node scripts/fonts-vendor.mjs`.
-   It overwrites assets/fonts/fonts.css and assets/fonts/files/. */
+   It empties assets/fonts/files/ and rewrites assets/fonts/fonts.css, so a
+   face that stops being asked for stops being carried. */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +28,34 @@ const SHEETS = [
     'https://fonts.googleapis.com/css2?family=Long+Cang&text=%E6%9D%A8%E6%B3%93%E9%94%B4&display=swap',
 ];
 
+/* What the src's format() keyword means on disk. The extension is not
+   decoration: a static host picks the Content-Type off it, and a font served
+   as application/octet-stream is one some browsers will refuse. */
+const EXT = { woff2: 'woff2', woff: 'woff', truetype: 'ttf', opentype: 'otf' };
+
+/* The name a downloaded file gets locally.
+
+   Google serves the ordinary faces from a path that already carries the
+   family and a version+hash — /s/ebgaramond/v31/SlGDmQSN….woff2 — but the
+   `text=`-subset ones come from a different shape entirely: /l/font?kit=…
+   &skey=…&v=v21, with no family in it and no extension on the end. So neither
+   half of the name is read off the path any more. The family comes from the
+   @font-face that asked for the file, and the identifying hash from the last
+   path segment or, failing that, from the kit — which is precisely what names
+   the subset. Both are stable across re-runs and change exactly when the
+   thing they name does. */
+function localName(url, family, format) {
+    const u = new URL(url);
+    const slug = family.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const tail = u.pathname.split('/').filter(Boolean).pop();
+    const hash = tail === 'font' ? u.searchParams.get('kit') : tail.replace(/\.[^.]+$/, '');
+    return `${slug}-${hash}.${EXT[format] || 'woff2'}`;
+}
+
+/* Emptied rather than written over: a face dropped from the sheets above
+   should leave, and a naming change should not leave its own leftovers
+   behind. Everything in here is fetched again on the next line. */
+await rm(filesDir, { recursive: true, force: true });
 await mkdir(filesDir, { recursive: true });
 
 const seen = new Map(); // remote url -> local basename
@@ -37,21 +66,30 @@ for (const sheet of SHEETS) {
     if (!res.ok) throw new Error(`${res.status} for ${sheet}`);
     let text = await res.text();
 
-    for (const url of new Set(text.match(/https:\/\/fonts\.gstatic\.com\/[^)]+/g))) {
-        if (!seen.has(url)) {
-            /* Google's path already names the family and holds a version+hash
-               (…/ebgaramond/v31/SlGDmQSN….woff2); folding it to family-hash
-               keeps the name unique, readable, and stable across re-runs. */
-            const parts = new URL(url).pathname.split('/').filter(Boolean);
-            const family = parts[1];
-            const base = parts[parts.length - 1];
-            seen.set(url, `${family}-${base}`);
+    /* Block by block, because the family a file belongs to is only knowable
+       from the rule that names it. */
+    for (const [, block] of text.matchAll(/@font-face\s*\{([^}]*)\}/g)) {
+        const family = block.match(/font-family:\s*['"]([^'"]+)['"]/)?.[1];
+        if (!family) throw new Error(`@font-face with no family in ${sheet}`);
+
+        const srcs = block.matchAll(
+            /url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)\s*format\(['"]([^'"]+)['"]\)/g);
+        for (const [, url, format] of srcs) {
+            if (seen.has(url)) continue;
+            seen.set(url, localName(url, family, format));
             const file = await fetch(url, { headers: { 'User-Agent': UA } });
             if (!file.ok) throw new Error(`${file.status} for ${url}`);
             await writeFile(join(filesDir, seen.get(url)), Buffer.from(await file.arrayBuffer()));
         }
-        text = text.replaceAll(url, `files/${seen.get(url)}`);
     }
+
+    for (const [url, name] of seen) text = text.replaceAll(url, `files/${name}`);
+
+    /* The whole point is that no page asks gstatic for anything. If a url
+       survived the rewrite the mirror is a half-mirror, and silently. */
+    if (text.includes('fonts.gstatic.com'))
+        throw new Error(`unrewritten gstatic url left in ${sheet}`);
+
     css += '\n' + text.trim() + '\n';
 }
 
