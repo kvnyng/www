@@ -107,8 +107,8 @@ header {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1.1rem;
-    padding: 0 1rem 1.25rem;
+    gap: 0.7rem;
+    padding: 0 1rem 0.85rem;
 }
 
 /* ── The pile ───────────────────────────────────────────────────────────── */
@@ -117,10 +117,18 @@ header {
    the viewport's width, a cap so a big monitor doesn't produce a poster, or
    the height left over once the counter has eaten its line — the pile must
    never scroll, paper is seen whole. The paper is the page, so it gets
-   nearly all of it; anything closer to the edges starts to crowd. */
+   nearly all of it: the reserve below is the counter's line and its gap plus
+   a last thin breath, and the poster cap sits a tenth above where it did.
+   Narrow screens keep the old reserve — see the tool arm's perch below. The
+   gutter is the room left either side: enough for the tool arm out on the
+   sheet's right shoulder, which the wider cap can otherwise crowd off the
+   screen on a tall, narrow window. */
 .pile {
     position: relative;
-    width: min(94vw, 46rem, calc((100svh - 8rem) * (612 / 792)));
+    --reserve: 4.25rem;
+    --gutter: 9rem;
+    width: min(50.6rem, calc(100vw - var(--gutter)),
+        calc((100svh - var(--reserve)) * (612 / 792)));
     aspect-ratio: 612 / 792;
     user-select: none;
     -webkit-user-select: none;
@@ -400,6 +408,14 @@ header {
 /* No room to the right on a narrow screen: perch above the corner instead,
    laid sideways so the column still grows away from the paper. */
 @media (max-width: 56rem) {
+    /* Perched above, the tools want that line of sky back, so the sheet stops
+       where it used to rather than growing into them — and with nothing out
+       to the side any more, the gutter is just the sheet's own margin. */
+    .pile {
+        --reserve: 8rem;
+        --gutter: 6vw;
+    }
+
     .tools {
         top: -3rem;
         right: 0;
