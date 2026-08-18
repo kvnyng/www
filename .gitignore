@@ -7,3 +7,7 @@
 __strokes/node_modules/
 __strokes/out/
 __strokes/vendor/
+
+# Claude Code's scratch space. .claude/worktrees holds whole checkouts of
+# this repo on their own branches; nothing under here is source.
+.claude/
