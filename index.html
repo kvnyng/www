@@ -16,27 +16,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home</title>
 
-    <!-- A <link> rather than an @import inside <style>: an @import isn't
-         discovered until the stylesheet around it has been fetched and parsed,
-         which serialises page CSS → font CSS → font files. The preconnects
-         warm both font hosts while style.css is still in flight. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Azeret+Mono:ital,wght@0,100..900;1,100..900&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Philosopher:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-        rel="stylesheet">
-    <!-- The brush hand for the Chinese column — see the note on --font-hanzi
-         for why this one.
+    <!-- The type is served from here, not from Google: the faces the pages
+         used to link from fonts.googleapis.com are mirrored into assets/fonts
+         by scripts/fonts-vendor.mjs, subsets and all — Long Cang included,
+         still cut down to the three characters of the name. Same origin means
+         no second and third handshake before a single glyph arrives, and
+         document.fonts.ready — which the entrance waits on — settles in the
+         time a local fetch takes rather than a stranger's.
 
-         A request of its own, because `text` applies to every family in the URL
-         it appears in and the three faces above need their whole character set.
-         It earns the extra round trip several times over: Long Cang is a CJK
-         face, and the three characters of the name fall in three different
-         unicode-range subsets, so the ordinary link would pull ~120kB down over
-         three connections to draw them. Named explicitly, Google returns one
-         file holding those three glyphs and nothing else — 2.2kB. -->
-    <link href="https://fonts.googleapis.com/css2?family=Long+Cang&text=%E6%9D%A8%E6%B3%93%E9%94%B4&display=swap"
-        rel="stylesheet">
+         A <link> rather than an @import inside <style>: an @import isn't
+         discovered until the stylesheet around it has been fetched and parsed,
+         which serialises page CSS → font CSS → font files. -->
+    <link rel="stylesheet" href="/assets/fonts/fonts.css">
     <!-- Retired with the Manchu column in the body: nothing renders in this
          face now, so a live preload would pull 30kB down for no one. Left here,
          commented, beside its @font-face and its styles in the stylesheet.

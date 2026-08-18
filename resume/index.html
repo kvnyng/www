@@ -17,10 +17,11 @@
     <title>Resume</title>
     <meta name="description" content="Kevin Yang's resume — a pile of pages dealt by scroll, or the PDF to take with you.">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Philosopher:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-        rel="stylesheet">
+    <!-- Served from this origin, not Google's — mirrored into assets/fonts by
+         scripts/fonts-vendor.mjs. The entrance waits on document.fonts.ready,
+         and a local fetch is the difference between that wait being felt and
+         not. -->
+    <link rel="stylesheet" href="/assets/fonts/fonts.css">
 
     <!-- Both pages at parse time: the top because the entrance waits on it,
          the one beneath because a pile whose under-page is still in flight
