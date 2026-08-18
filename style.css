@@ -858,6 +858,15 @@ body {
     font-family: var(--font-body);
 }
 
+/* Selected text speaks the site's own accent instead of the browser's blue:
+   the ground deepens to rust — the accent sunk into the room's dark — and
+   every word goes white while it's held, the greys and oranges included,
+   because a selection is one gesture and reads best as one color. */
+::selection {
+    background: rgba(199, 91, 59, 0.45);
+    color: var(--text-color);
+}
+
 .philosopher-regular {
     font-family: "Philosopher", serif;
     font-weight: 400;

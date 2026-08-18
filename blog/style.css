@@ -23,6 +23,14 @@ body {
     color: var(--text-color);
 }
 
+/* Selected text speaks the site's accent instead of the browser's blue —
+   same rule as the front page's stylesheet, copied for the same reason the
+   tokens above are: this file stands on its own. */
+::selection {
+    background: rgba(199, 91, 59, 0.45);
+    color: var(--text-color);
+}
+
 .title {
     font-family: var(--font-heading);
     font-size: 3rem;
