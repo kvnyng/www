@@ -1,0 +1,449 @@
+/* /resume — the rest of the site talks about the work; this page hands you
+   the paper. Same room as the front page — the same dark grey, the same
+   faces, the same entrance — with a pile of pages lit in the middle of it.
+
+   The resume is two sheets, and the reader is built as that object: a pile
+   on the desk, read by dealing pages off the top. Scroll is the hand. The
+   top sheet's position is a direct function of scroll — scrubbed, not
+   triggered — so dragging down sweeps it off toward the bottom-left in an
+   arc, and scrolling back up flies it back the way it came. The tokens are
+   copied from the front page's stylesheet rather than linked, so this page
+   stays a complete thought on its own. */
+
+:root {
+    --text-color: white;
+    --background-color: #1E1E1E;
+    --accent-color: #C75B3B;
+    --highlight-color: var(--accent-color);
+    --grey-out: #808080;
+    --shadow: #363636;
+
+    --font-body: 'EB Garamond', Georgia, serif;
+    --font-heading: 'Philosopher', sans-serif;
+
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --reveal-duration: 560ms;
+    --reveal-stagger: 60ms;
+    --reveal-distance: 12px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* The page does not scroll. The document scroll was tried as the deal's
+   engine and retired: the browser eases every wheel tick on its own curve
+   before scripts ever see scrollY, which read as a dead beat at the start of
+   each gesture — and by then snap, bounce and scrollbar had all been
+   replaced anyway. The wheel now speaks to the pile directly. */
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    margin: 0;
+    background-color: var(--background-color);
+    font-family: var(--font-body);
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────────────────────── */
+
+/* Fixed, because the page underneath scrolls: the crumb stays pinned to the
+   room while the pile is dealt. */
+header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    padding: 1.5rem 2rem;
+    z-index: 10;
+}
+
+.crumbs {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    user-select: none;
+    -webkit-user-select: none;
+    /* A breath of the room's own dark behind the letters: invisible against
+       the grey desk, and what keeps the white words legible when a zoomed
+       sheet slides underneath them. */
+    text-shadow: 0 1px 10px rgba(30, 30, 30, 0.9), 0 0 3px rgba(30, 30, 30, 0.9);
+}
+
+.crumbs .home {
+    color: var(--grey-out);
+    text-decoration: none;
+}
+
+.crumbs .home:hover {
+    color: var(--highlight-color);
+}
+
+.crumbs .sep {
+    color: var(--shadow);
+    margin: 0 0.6rem;
+}
+
+.crumbs .here {
+    color: var(--text-color);
+}
+
+/* ── The scene ──────────────────────────────────────────────────────────
+   One viewport, holding everything. overflow: clip, not hidden: the flying
+   sheet leaves through this box's edges, and clip trims it without minting
+   a scroll container. touch-action keeps the browser's pinch (a phone's
+   native zoom) while handing vertical drags to the script as pointer
+   events — they are the deal on a phone. */
+.scene {
+    position: relative;
+    height: 100svh;
+    touch-action: pinch-zoom;
+    overflow: clip;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.1rem;
+    padding: 0 1rem 1.25rem;
+}
+
+/* ── The pile ───────────────────────────────────────────────────────────── */
+
+/* US Letter, held to its true proportion. Width is whichever runs out first:
+   the viewport's width, a cap so a big monitor doesn't produce a poster, or
+   the height left over once the counter has eaten its line — the pile must
+   never scroll, paper is seen whole. The paper is the page, so it gets
+   nearly all of it; anything closer to the edges starts to crowd. */
+.pile {
+    position: relative;
+    width: min(94vw, 46rem, calc((100svh - 8rem) * (612 / 792)));
+    aspect-ratio: 612 / 792;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* The magnifying glass. Zoom and pan land here as one transform, on a box of
+   its own between the pile and the sheets: the pile anchors the download
+   icon and the entrance animation (whose fill would fight an inline
+   transform), and the sheets keep their flight. */
+.zoomer {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+}
+
+/* While a shift- or right-drag is in flight, the hand closes. */
+.scene.panning,
+.scene.panning .grab {
+    cursor: grabbing;
+}
+
+/* Not a control anymore — a surface. Clicking no longer deals (the wheel,
+   a drag, and the arrow keys do); the click belongs to the words now. The
+   perspective property hands depth to the sheets inside, so the top page's
+   slight pitch while airborne reads as a tilt and not a squash. */
+.grab {
+    position: absolute;
+    inset: 0;
+    perspective: 1400px;
+    /* The overscroll swing lands here as a transform each frame. */
+    will-change: transform;
+}
+
+.sheet {
+    position: absolute;
+    inset: 0;
+    will-change: transform;
+}
+
+/* The pages are pdftocairo's SVG tracings of the real PDF — every glyph a
+   path, so the type is the resume's own, not a webfont approximation, and it
+   stays crisp at any size. The ink sits on transparent ground; the white
+   here is the paper, and the box-shadow is its body — two hairlines of
+   stacked edge and a line of contact shade, which is what makes two sheets
+   read as a pile rather than two rectangles. */
+.sheet img {
+    /* Positioned so it paints above the aura: an absolutely positioned shade
+       beside a static image would land on top of the paper, not under it. */
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: white;
+    border-radius: 2px;
+    box-shadow:
+        0 1px 0 #d6d4cd,
+        0 2.5px 0 #b9b7af,
+        0 4px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* Each sheet's pool of shade on the desk. Its own element rather than more
+   box-shadow: the script moves and deepens it as the sheet lifts, and shade
+   under a lifted page softens and travels — a box-shadow would stay welded
+   to the paper's outline.
+
+   The softness is a gradient, not filter: blur() — a filter is re-run by the
+   compositor on every frame it draws, and two page-sized blurs per frame is
+   exactly the kind of bill that reads as scroll lag. A radial gradient bakes
+   the same penumbra into the texture once. And will-change lifts the shade
+   onto its own layer: without it, the script's per-frame opacity writes
+   would repaint the parent sheet's layer — re-rastering a few hundred
+   kilobytes of vector paths to nudge a shadow. */
+.aura {
+    position: absolute;
+    background: radial-gradient(ellipse closest-side,
+            rgba(0, 0, 0, 0.85) 45%,
+            rgba(0, 0, 0, 0.45) 72%,
+            rgba(0, 0, 0, 0) 100%);
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+.s1 .aura {
+    inset: 0% -3% -6% -3%;
+    opacity: 0.38;
+}
+
+.s2 .aura {
+    inset: 2% -5% -8% -5%;
+    opacity: 0.3;
+}
+
+/* The lens: a canvas the real PDF is drawn into whenever the view is zoomed.
+   The sheet's base image is a texture, and a texture zoomed five times is
+   five-times-stretched pixels — the compositor never goes back to the
+   vectors. The lens does: it re-renders the visible crop from the PDF itself
+   at exactly the screen's resolution, positioned in sheet coordinates so the
+   zoomer's transform lands it 1:1 on the glass. */
+.lens {
+    position: absolute;
+    background: white;
+    pointer-events: none;
+}
+
+.lens[hidden] {
+    display: none;
+}
+
+/* The words of the actual PDF, laid invisibly over the picture of them.
+   Selection needs to win back what the pile switched off: the text is
+   selectable, the ink transparent, the cursor honest. Its spans are placed
+   by pdf.js in sheet coordinates, so every transform the sheet takes — the
+   flight, the zoom, the swing — carries the words along exactly. */
+.textlayer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    line-height: 1;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.textlayer :is(span, br) {
+    position: absolute;
+    white-space: pre;
+    transform-origin: 0 0;
+    color: transparent;
+}
+
+.textlayer ::selection {
+    background: rgba(199, 91, 59, 0.35);
+}
+
+.textlayer a {
+    position: absolute;
+    cursor: pointer;
+}
+
+/* The tools withdraw under the glass with the caption — same reasoning,
+   same clock: a download button belongs to the resting view of the pile,
+   and a zoomed-in reader is inside the paper. visibility rides along so the
+   faded icon can't be clicked by accident. */
+.tools-arm {
+    transition: opacity 360ms var(--ease-out), visibility 0s 0s;
+}
+
+.scene.zoomed .tools-arm {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 360ms var(--ease-out), visibility 0s 360ms;
+}
+
+/* The under-page sits a shade darker: it is lying in the top sheet's light.
+   The script fades this away as it becomes the top of the pile. On its own
+   layer for the same reason as the aura — fading it must not repaint the
+   page it lies on. */
+.dim {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0.07;
+    border-radius: 2px;
+    pointer-events: none;
+    will-change: opacity;
+}
+
+/* The resting pile, before the script says anything: the under-sheet lies a
+   touch askew, the way a pile actually lands, and its corners peeking past
+   the top page are what say "there is more under here". The script unwinds
+   this askew as the sheet is promoted. */
+.s2 {
+    transform: rotateZ(1.7deg) translate(0.5%, 0.6%);
+}
+
+/* ── The counter ────────────────────────────────────────────────────────── */
+
+/* The perch is the flex seat and the stacking order — z-index counts on a
+   flex item, and the p inside is no longer one. It also carries the
+   entrance, whose both-ways fill would otherwise own the counter's opacity
+   for good; the zoom fade below needs that channel to itself. */
+.counter-perch {
+    z-index: 5;
+}
+
+.counter {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    color: var(--grey-out);
+    user-select: none;
+    -webkit-user-select: none;
+    /* Same halo as the crumbs, for when the zoomed sheet passes behind. */
+    text-shadow: 0 1px 10px rgba(30, 30, 30, 0.9), 0 0 3px rgba(30, 30, 30, 0.9);
+    /* Under the glass the caption withdraws — a page number belongs to the
+       pile, and a zoomed-in reader is inside the paper. It walks back in
+       with the resting view. */
+    transition: opacity 360ms var(--ease-out);
+}
+
+.scene.zoomed .counter {
+    opacity: 0;
+}
+
+/* "one of two", where only the first word ever changes — and it changes by
+   rolling, letter by letter, through the alphabet (see the odometer in the
+   script). The stack holds the two resting words as width floors and a live
+   layer the roll is typed into; the script widens the cell once to the
+   longest word the roll can pass through, so "of two" never moves an inch,
+   mid-cycle included. The words grow leftward from the fixed edge they
+   share with "of". */
+.counter .word {
+    display: inline-grid;
+    margin-right: 0.45em;
+}
+
+.counter .word .n {
+    grid-area: 1 / 1;
+    justify-self: end;
+    visibility: hidden;
+    color: var(--text-color);
+}
+
+.counter .word .n.selected,
+.counter .word .n.live {
+    visibility: visible;
+}
+
+/* ── The tool arm ───────────────────────────────────────────────────────
+   The buttons hang off the shoulder of the bottommost sheet — the one whose
+   corners stick out — and hold its exact orientation: the arm is a box the
+   same size as the sheets, given the under-page's transform each frame, so
+   as that page straightens under a deal the column swings upright with it.
+   It sits on the pile, not in the zoomer, so the paper scales under it and
+   the tools stay put and stay small. The resting askew here mirrors .s2 for
+   the moment before the script speaks. */
+.tools-arm {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transform: rotateZ(1.7deg) translate(0.5%, 0.6%);
+    z-index: 6;
+}
+
+/* A column, so the next tool lands under this one. */
+.tools {
+    position: absolute;
+    top: 0;
+    right: -2.925rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: auto;
+}
+
+.dl {
+    padding: 0.4rem;
+    color: var(--grey-out);
+    display: block;
+    line-height: 0;
+}
+
+.dl:hover {
+    color: var(--highlight-color);
+}
+
+/* Pressed: the stamp gives by a pixel, same as the seals on the front page. */
+.dl:active {
+    translate: 0 1px;
+}
+
+.dl:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 3px;
+}
+
+/* No room to the right on a narrow screen: perch above the corner instead,
+   laid sideways so the column still grows away from the paper. */
+@media (max-width: 56rem) {
+    .tools {
+        top: -3rem;
+        right: 0;
+        flex-direction: row;
+    }
+}
+
+/* For the status line only screen readers hear. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* ── Entrance ───────────────────────────────────────────────────────────
+   The same gesture as the front page: hold at nothing until the type and the
+   pile itself have arrived, then rise into place on a stagger. .js-preload
+   is set by an inline script in the head, so the hidden state lands before
+   first paint — and no JS means no class, a static page, and no animation. */
+
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        transform: translateY(var(--reveal-distance));
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+html.js-preload .rise {
+    opacity: 0;
+}
+
+html.ready .rise {
+    animation: rise-in var(--reveal-duration) var(--ease-out) both;
+    animation-delay: calc(var(--i) * var(--reveal-stagger));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.ready .rise {
+        animation-duration: 1ms;
+        animation-delay: 0ms;
+    }
+}

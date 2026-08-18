@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-YFRHXEL78W"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-YFRHXEL78W');
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume</title>
+    <meta name="description" content="Kevin Yang's resume — a pile of pages dealt by scroll, or the PDF to take with you.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Philosopher:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+        rel="stylesheet">
+
+    <!-- Both pages at parse time: the top because the entrance waits on it,
+         the one beneath because a pile whose under-page is still in flight
+         would deal down onto nothing. -->
+    <link rel="preload" href="page-1.svg" as="image" type="image/svg+xml">
+    <link rel="preload" href="page-2.svg" as="image" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Inline and synchronous on purpose: this has to land before the first
+         paint, or the page flashes at full opacity before the entrance runs. -->
+    <script>document.documentElement.classList.add('js-preload');</script>
+</head>
+
+<body>
+    <header class="rise" style="--i: 0">
+        <nav class="crumbs">
+            <a class="home" href="/">kevin yang</a><span class="sep">/</span><span class="here">resume</span>
+        </nav>
+    </header>
+
+    <div class="scene">
+            <div class="pile rise" style="--i: 1">
+                <div class="zoomer">
+                    <div class="grab">
+                        <div class="sheet s2">
+                            <div class="aura"></div>
+                            <img src="page-2.svg" alt="Resume, page two" width="612" height="792">
+                            <canvas class="lens" hidden></canvas>
+                            <div class="textlayer"></div>
+                            <div class="dim"></div>
+                        </div>
+                        <div class="sheet s1">
+                            <div class="aura"></div>
+                            <img src="page-1.svg" alt="Resume, page one" width="612" height="792">
+                            <canvas class="lens" hidden></canvas>
+                            <div class="textlayer"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tools-arm">
+                    <div class="tools">
+                        <a class="dl" href="/kevin_yang_resume.pdf" download
+                            aria-label="Download the resume as a PDF">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 4v11" />
+                                <path d="m7 11 5 5 5-5" />
+                                <path d="M5 20h14" />
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- The rise lives on a perch above the counter, not on the
+                 counter itself: the entrance animation fills both ways, so it
+                 owns its element's opacity forever after — and the zoom fade
+                 needs that channel to itself. -->
+            <div class="counter-perch rise" style="--i: 2">
+                <p class="counter" aria-hidden="true"><span class="word"><span
+                            class="n one selected">one</span><span class="n two">two</span><span
+                            class="n live"></span></span>of two</p>
+            </div>
+
+        <p class="sr-only" role="status"></p>
+    </div>
+
+    <noscript>
+        <style>
+            /* No script means no deal: give the document its scroll back and
+               lay the two pages out as plain reading, one above the other. */
+            html, body { overflow: auto; height: auto; }
+            .scene { position: static; height: auto; overflow: visible; padding: 6rem 0 3rem; }
+            .pile { aspect-ratio: auto; width: min(92vw, 38rem); }
+            .grab { position: static; cursor: default; }
+            .sheet { position: static; }
+            .sheet img { height: auto; margin-bottom: 2rem; }
+            .s2 { transform: none; }
+            .aura, .dim { display: none; }
+        </style>
+    </noscript>
+
+    <script>
+        (() => {
+            const scene = document.querySelector('.scene');
+            const pile = document.querySelector('.pile');
+            const zoomer = document.querySelector('.zoomer');
+            const s1 = document.querySelector('.s1');
+            const s2 = document.querySelector('.s2');
+            const aura1 = s1.querySelector('.aura');
+            const aura2 = s2.querySelector('.aura');
+            const dim = s2.querySelector('.dim');
+            const grab = document.querySelector('.grab');
+            const arm = document.querySelector('.tools-arm');
+            const lenses = [
+                document.querySelector('.s1 .lens'),
+                document.querySelector('.s2 .lens'),
+            ];
+            const one = document.querySelector('.counter .one');
+            const live = document.querySelector('.counter .live');
+            const status = document.querySelector('[role="status"]');
+            const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+            const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+            const smooth = (u) => u * u * (3 - 2 * u);
+            const bez = (a, b, c, d, u) => {
+                const v = 1 - u;
+                return v * v * v * a + 3 * v * v * u * b + 3 * v * u * u * c + u * u * u * d;
+            };
+
+            /* Everything below is a picture of one number: how far page one
+               has gone. The hand writes `target` — wheel deltas at a
+               sensitivity of this page's choosing, touch drags scaled to the
+               screen — and the drawn `current` chases it through one fast
+               filter (~60ms), which is what turns a notched wheel's discrete
+               ticks into motion that starts the same frame and eases out
+               instead of stopping dead. There is no document scroll behind
+               any of it, and no snap in front: the pile rests wherever the
+               gesture leaves it, mid-deal included. */
+            let target = 0;
+            let current = 0;
+            let raf = null;
+            let last = null;
+
+            /* Wheel pixels for a full deal. Small enough that one tick of a
+               notched wheel visibly commits the paper to moving. */
+            const DEAL_WHEEL = 450;
+
+            /* The commit tween: a short easing that finishes what a gesture
+               started. Cancelled the instant a new gesture speaks. */
+            let tweenFrom = 0;
+            let tweenTo = null;
+            let tweenStart = 0;
+
+            /* Overscroll: pushing past either end of the track swings the
+               pile out along an arc — bottom-right past the top, bottom-left
+               past the bottom — and a spring carries it home on release.
+               `overTarget` is where the hand has pushed it (decaying toward
+               zero on its own), `overCurrent` is where the paper actually is,
+               trailing it. Positive is the top-end swing, negative the
+               bottom-end one. */
+            let overTarget = 0;
+            let overCurrent = 0;
+
+            /* Measured once and on resize, never per event. */
+            let W = 0, H = 0;
+            function measure() {
+                W = innerWidth;
+                H = innerHeight;
+            }
+            measure();
+
+            /* ── The odometer ─────────────────────────────────────────────
+               The counter word does not swap, it counts: each letter of
+               "one" cycles through the alphabet to its letter in "two", one
+               position at a time — o rolls to t, then n to w, then e to o —
+               and the whole roll is a pure function of the deal, so dragging
+               the paper back rolls the letters back the way they came, last
+               position first. The deal's range is shared out proportionally
+               to each letter's distance, so the alphabet always turns at one
+               speed under the hand. Positions the source word lacks begin at
+               "a"; positions the destination lacks roll home to "a" and step
+               off. */
+            const FROM = 'one';
+            const TO = 'two';
+            const segs = [];
+            let totalSteps = 0;
+            for (let i = 0; i < Math.max(FROM.length, TO.length); i++) {
+                const src = FROM[i] ? FROM.charCodeAt(i) - 97 : null;
+                const dst = TO[i] ? TO.charCodeAt(i) - 97 : null;
+                const steps =
+                    src !== null && dst !== null ? (dst - src + 26) % 26 :
+                    dst !== null ? dst : src;
+                segs.push({ src, dst, steps });
+                totalSteps += steps;
+            }
+            function wordAt(t) {
+                if (t <= 0) return FROM;
+                if (t >= 1) return TO;
+                let pos = t * totalSteps;
+                let out = '';
+                for (const g of segs) {
+                    const local = clamp(pos, 0, g.steps);
+                    pos -= g.steps;
+                    /* Midpoint flips: each letter changes halfway through
+                       its window, so the last one lands at t ≈ 0.98 instead
+                       of exactly 1 — which the tween's ease-out and the
+                       chase only ever approach asymptotically. Flipping on
+                       the boundary made the final letter hang. */
+                    const idx = Math.min(g.steps, Math.floor(local + 0.5));
+                    if (g.src === null) {
+                        /* Filled in from "a", present once its turn starts. */
+                        if (local > 0) out += String.fromCharCode(97 + idx % 26);
+                    } else if (g.dst === null) {
+                        /* Rolls home to "a", then steps off the word. */
+                        if (local < g.steps) out += String.fromCharCode(97 + g.src - idx);
+                    } else {
+                        out += String.fromCharCode(97 + (g.src + idx) % 26);
+                    }
+                }
+                return out;
+            }
+            let shownWord = '';
+
+            /* The cell is sized once to the widest word the roll can ever
+               show, so "of two" never moves an inch mid-cycle. */
+            function fitCounter() {
+                const cs = getComputedStyle(live);
+                const ctx = document.createElement('canvas').getContext('2d');
+                ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+                let max = 0;
+                for (let k = 0; k <= totalSteps; k++) {
+                    max = Math.max(max, ctx.measureText(wordAt(k / totalSteps)).width);
+                }
+                document.querySelector('.counter .word').style.minWidth = Math.ceil(max) + 'px';
+            }
+
+            function paint(t) {
+                const st = smooth(t);
+                /* The swing: linear travel sideways, squared travel down —
+                   a parabolic arc — with a little lean into the turn. It
+                   moves the whole handful (sheets, shades, dim) plus the tool
+                   arm, which composes it ahead of its own under-page tilt. */
+                const o = overCurrent;
+                const swing = o === 0 ? '' :
+                    `translate3d(${0.14 * pile.offsetWidth * o}px, ${0.07 * pile.offsetHeight * o * o}px, 0)` +
+                    ` rotateZ(${5 * o}deg)`;
+                if (reduced.matches) {
+                    /* No flight: the top page simply thins away in place. */
+                    s1.style.transform = 'none';
+                    s1.style.opacity = String(1 - st);
+                    s2.style.transform = 'none';
+                    arm.style.transform = 'none';
+                    grab.style.transform = '';
+                } else {
+                    grab.style.transform = swing;
+                    /* The flight is a cubic bezier in viewport units: a small
+                       lift up-and-left first — the pick — then the long sweep
+                       down and off the bottom-left, twisting as it goes.
+
+                       Translate and rotate only, no scale: the sheets are
+                       layers of rastered vector paths, and a scale that moves
+                       every frame makes the compositor re-raster them at each
+                       new size. Rotation and travel reuse the same texture;
+                       the lift is sold by the shade instead. */
+                    const x = bez(0, -0.16 * W, -0.80 * W, -1.35 * W, t);
+                    const y = bez(0, -0.08 * H, 0.28 * H, 1.10 * H, t);
+                    /* Airborne-ness: rises from the desk, gone again before
+                       the sheet leaves frame, so nothing pops at the end. */
+                    const air = Math.sin(Math.PI * Math.min(1, t * 1.25));
+                    s1.style.opacity = '';
+                    s1.style.transform =
+                        `translate3d(${x}px, ${y}px, 0) rotateZ(${-34 * st}deg)` +
+                        ` rotateX(${6 * air}deg)`;
+                    /* The shade under the flying sheet slides out from beneath
+                       it and thins — height read as light. */
+                    aura1.style.opacity = String(0.38 + 0.22 * air);
+                    aura1.style.transform =
+                        `translate(${-18 * air}px, ${24 * air}px) scale(${1 + 0.1 * air})`;
+                    /* And the page beneath is promoted: its resting askew
+                       unwinds, its dimness lifts, its shade deepens into the
+                       contact shadow of a top page. */
+                    /* The arm shares the under-page's transform verbatim, so
+                       the tools hang off that sheet's shoulder and swing
+                       upright with it as it straightens. */
+                    const under =
+                        `rotateZ(${1.7 * (1 - st)}deg) translate(${0.5 * (1 - st)}%, ${0.6 * (1 - st)}%)`;
+                    s2.style.transform = under;
+                    arm.style.transform = swing ? `${swing} ${under}` : under;
+                    aura2.style.opacity = String(0.30 + 0.12 * st);
+                }
+                dim.style.opacity = String(0.07 * (1 - st));
+                const w = reduced.matches ? (t < 0.5 ? FROM : TO) : wordAt(t);
+                if (w !== shownWord) {
+                    shownWord = w;
+                    live.textContent = w;
+                }
+            }
+
+            function step(ts) {
+                const dt = last === null ? 16.7 : ts - last;
+                last = ts;
+                /* Time-based decay so the trail feels the same at 60 and 120Hz. */
+                const k = reduced.matches ? 1 : 1 - Math.pow(0.818, dt / 16.7);
+                /* The navigation tween eases an asked-for page in — only
+                   ever started by an explicit request, never by the clock. */
+                if (tweenTo !== null) {
+                    const u = Math.min(1, (ts - tweenStart) / (reduced.matches ? 1 : 320));
+                    target = tweenFrom + (tweenTo - tweenFrom) * (1 - Math.pow(1 - u, 3));
+                    if (u === 1) {
+                        target = tweenTo;
+                        tweenTo = null;
+                        rest();
+                    }
+                }
+                /* The chase: fast enough to be felt as direct, slow enough
+                   to round a tick's edges. */
+                const kc = reduced.matches ? 1 : 1 - Math.exp(-dt / 60);
+                const dd = target - current;
+                current = Math.abs(dd) < 0.001 ? target : current + dd * kc;
+                /* The overscroll spring: the pushed-to point sags toward zero
+                   on its own clock, and the paper trails it — out fast under
+                   the hand, home on an easing arc when the hand lets go. */
+                overTarget -= overTarget * (1 - Math.pow(0.852, dt / 16.7));
+                if (Math.abs(overTarget) < 0.002) overTarget = 0;
+                const od = overTarget - overCurrent;
+                overCurrent = (overTarget === 0 && Math.abs(od) < 0.002) ? 0 : overCurrent + od * k;
+                paint(current);
+                if (tweenTo === null && current === target &&
+                    overCurrent === 0 && overTarget === 0) {
+                    raf = null;
+                    last = null;
+                } else {
+                    raf = requestAnimationFrame(step);
+                }
+            }
+            const kick = () => { if (raf === null) raf = requestAnimationFrame(step); };
+
+            addEventListener('resize', () => { measure(); kick(); scheduleSharpen(); buildTextLayers(); });
+
+            /* The pile is at rest on a page: tell the world which. */
+            function rest() {
+                scheduleSharpen();
+                const onTwo = target >= 0.5;
+                history.replaceState(null, '', onTwo ? '#two' : location.pathname);
+                status.textContent = onTwo ? 'Showing page two of two' : 'Showing page one of two';
+            }
+
+            /* No snapping: the pile rests wherever the hand leaves it. The
+               idle timer only brings the bookkeeping — hash, label, lens —
+               up to date once the motion has gone quiet. */
+            let idleTimer = null;
+            function armIdle() {
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                    if (tweenTo === null) rest();
+                }, 160);
+            }
+
+            function goTo(p) {
+                if (p === target) { rest(); return; }
+                tweenFrom = target;
+                tweenTo = p;
+                tweenStart = performance.now();
+                kick();
+            }
+
+            /* One entry point for every dealing gesture, in wheel pixels.
+               At the ends the push spills into the overscroll swing. */
+            function scrub(dy, settleOnIdle) {
+                if (target <= 0 && dy < 0) {
+                    if (!reduced.matches) overTarget = clamp(overTarget - dy * 0.0046, 0, 1);
+                } else if (target >= 1 && dy > 0) {
+                    if (!reduced.matches) overTarget = clamp(overTarget - dy * 0.0046, -1, 0);
+                } else {
+                    tweenTo = null;
+                    target = clamp(target + dy / DEAL_WHEEL, 0, 1);
+                }
+                kick();
+                if (settleOnIdle) armIdle();
+            }
+            addEventListener('keydown', (e) => {
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                if (e.key === 'ArrowRight' || e.key === 'PageDown') goTo(1);
+                if (e.key === 'ArrowLeft' || e.key === 'PageUp') goTo(0);
+                if (e.key === 'Escape') { z = 1; panX = panY = 0; applyZoom(); }
+            });
+
+            /* ── The magnifying glass ─────────────────────────────────────
+               Pinch (which browsers report as a ctrl-wheel), or a literal
+               ctrl-scroll, zooms about the cursor; shift-drag or right-drag
+               pans. All of it is one transform on the zoomer, so the flight
+               and the deal are untouched underneath it. */
+            let z = 1, panX = 0, panY = 0;
+            let panning = false, panned = false, lx = 0, ly = 0;
+
+            function applyZoom() {
+                /* The pan is leashed to the zoom: enough travel to reach any
+                   corner of the enlarged sheet, never enough to lose it. */
+                const mx = (z - 1) * pile.offsetWidth * 0.75;
+                const my = (z - 1) * pile.offsetHeight * 0.75;
+                panX = clamp(panX, -mx, mx);
+                panY = clamp(panY, -my, my);
+                zoomer.style.transform = z === 1 ? '' :
+                    `translate3d(${panX}px, ${panY}px, 0) scale(${z})`;
+                /* The caption is furniture of the pile, not the paper: under
+                   the glass it steps out of the way, and it walks back in
+                   when the glass is put down. */
+                scene.classList.toggle('zoomed', z !== 1);
+                scheduleSharpen();
+            }
+
+            function zoomAt(cx, cy, nz) {
+                /* The ceiling is generosity, not a limit of the renderer —
+                   the lens redraws the visible crop at screen resolution
+                   whatever the zoom, at a cost bounded by the screen. At 64x
+                   a line of body type spans several desks; past that is not
+                   reading, and eventually not float32 either. */
+                nz = clamp(nz, 1, 64);
+                /* Keep the point under the cursor under the cursor. */
+                const r = pile.getBoundingClientRect();
+                const sx = cx - (r.left + r.width / 2);
+                const sy = cy - (r.top + r.height / 2);
+                panX = sx - ((sx - panX) / z) * nz;
+                panY = sy - ((sy - panY) / z) * nz;
+                z = nz;
+                applyZoom();
+            }
+
+            addEventListener('wheel', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    /* Exponential, clamped per event: a pinch's fine deltas
+                       glide and a wheel's coarse notches step, both at a sane
+                       rate. */
+                    zoomAt(e.clientX, e.clientY,
+                        z * Math.exp(clamp(-e.deltaY, -24, 24) * 0.011));
+                    return;
+                }
+                /* Zoomed in, plain scroll moves around the sheet instead of
+                   dealing it away — the deal comes back when the glass does. */
+                if (z > 1) {
+                    e.preventDefault();
+                    panX -= e.deltaX;
+                    panY -= e.deltaY;
+                    applyZoom();
+                    return;
+                }
+                /* The deal itself. Nothing else scrolls on this page, so the
+                   wheel's deltas are the hand on the pile — momentum
+                   included, since macOS delivers it as more wheel events. */
+                e.preventDefault();
+                scrub(e.deltaY, true);
+            }, { passive: false });
+
+            /* Safari reports a pinch as its own gesture, not a ctrl-wheel. */
+            let gestureBase = 1;
+            addEventListener('gesturestart', (e) => { e.preventDefault(); gestureBase = z; });
+            addEventListener('gesturechange', (e) => {
+                e.preventDefault();
+                zoomAt(e.clientX, e.clientY, gestureBase * e.scale);
+            });
+            addEventListener('gestureend', (e) => e.preventDefault());
+
+            let touchDrag = null;
+            scene.addEventListener('pointerdown', (e) => {
+                if (e.button === 2 || (e.button === 0 && e.shiftKey) ||
+                    (e.pointerType === 'touch' && z > 1)) {
+                    panning = true;
+                    panned = false;
+                    lx = e.clientX;
+                    ly = e.clientY;
+                    try { scene.setPointerCapture(e.pointerId); } catch (err) { }
+                    scene.classList.add('panning');
+                    e.preventDefault();
+                } else if (e.pointerType === 'touch') {
+                    /* A finger on the unzoomed pile is a hand on the deal. */
+                    touchDrag = { y: e.clientY, moved: 0 };
+                    try { scene.setPointerCapture(e.pointerId); } catch (err) { }
+                }
+            });
+            scene.addEventListener('pointermove', (e) => {
+                if (panning) {
+                    panX += e.clientX - lx;
+                    panY += e.clientY - ly;
+                    lx = e.clientX;
+                    ly = e.clientY;
+                    panned = true;
+                    applyZoom();
+                } else if (touchDrag) {
+                    const dy = touchDrag.y - e.clientY;
+                    touchDrag.y = e.clientY;
+                    touchDrag.moved += Math.abs(dy);
+                    /* Scaled so a bit over half the screen's height deals a
+                       page; committed on release, not mid-hold. */
+                    scrub(dy * (DEAL_WHEEL / (0.55 * H)), false);
+                }
+            });
+            const endPan = () => {
+                if (touchDrag) {
+                    if (touchDrag.moved > 8) panned = true;
+                    touchDrag = null;
+                    armIdle();
+                }
+                panning = false;
+                scene.classList.remove('panning');
+            };
+            scene.addEventListener('pointerup', endPan);
+            scene.addEventListener('pointercancel', endPan);
+            /* The right button pans, so the menu it usually carries is off
+               within the scene. */
+            scene.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            /* ── The lens ─────────────────────────────────────────────────
+               The sheets' base images are textures, and a texture magnified
+               is just bigger pixels — no engine walks back to the vectors on
+               zoom. So past 1x, the actual PDF is fetched (once, lazily,
+               pdf.js and worker vendored beside this file) and the visible
+               crop of the page is re-rendered at exactly screen resolution.
+               The canvas lives in sheet coordinates, so the zoomer lands it
+               1:1 on the glass. Crop size is bounded by the screen, so the
+               cost of perfect sharpness never grows with zoom.
+
+               The render is not debounced to the end of the gesture — it
+               chases it, the way any serious viewer's tiles do: one render in
+               flight at a time, and the moment it lands, if the view has
+               moved on, the next begins. Each pass draws offstage and is
+               swapped in whole, so the glass never shows a half-painted
+               frame; between passes the stale lens keeps perfect geometry at
+               yesterday's resolution, which the base image backstops. */
+            let pdfLib = null;
+            let pdfPages = [null, null];
+            let pdfWanted = false;
+            let viewDirty = false;
+            let rendering = false;
+            const scratch = document.createElement('canvas');
+            const scratchCtx = scratch.getContext('2d');
+
+            function scheduleSharpen() {
+                viewDirty = true;
+                if (rendering) return;
+                rendering = true;
+                (async () => {
+                    while (viewDirty) {
+                        viewDirty = false;
+                        try { await sharpen(); } catch (err) { /* keep pumping */ }
+                    }
+                    rendering = false;
+                })();
+            }
+
+            /* Dragging the window onto a denser screen redefines what
+               "screen resolution" means without firing a resize: watch the
+               device pixel ratio itself, and re-render the lens when it
+               moves. */
+            (function watchDpr() {
+                matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener(
+                    'change', () => { scheduleSharpen(); watchDpr(); }, { once: true });
+            })();
+
+            async function ensurePdf() {
+                if (pdfWanted) return;
+                pdfWanted = true;
+                try {
+                    const lib = await import('./vendor/pdf.min.js');
+                    lib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
+                    const doc = await lib.getDocument('/kevin_yang_resume.pdf').promise;
+                    pdfLib = lib;
+                    pdfPages = [await doc.getPage(1), await doc.getPage(2)];
+                    scheduleSharpen();
+                    buildTextLayers();
+                } catch (err) {
+                    /* No lens, but the base images still stand — and a flaky
+                       fetch is forgiven after a beat rather than for good. */
+                    setTimeout(() => { pdfWanted = false; }, 4000);
+                }
+            }
+
+            /* ── The ink you can touch ────────────────────────────────────
+               The visible pages are pictures, but a PDF knows its own words.
+               A transparent text layer from the real document lies over each
+               sheet — same glyphs, same places, no color — so the paper can
+               be selected, copied, and its links clicked. It lives in sheet
+               coordinates and rides every transform the sheet takes. */
+            const textLayers = [
+                document.querySelector('.s1 .textlayer'),
+                document.querySelector('.s2 .textlayer'),
+            ];
+            let textBuiltAt = 0;
+            async function buildTextLayers() {
+                if (!pdfLib || !pdfPages[0]) return;
+                const wpx = pile.offsetWidth;
+                if (!wpx || wpx === textBuiltAt) return;
+                textBuiltAt = wpx;
+                for (let i = 0; i < 2; i++) {
+                    const container = textLayers[i];
+                    container.replaceChildren();
+                    const viewport = pdfPages[i].getViewport({ scale: wpx / 612 });
+                    container.style.setProperty('--scale-factor', viewport.scale);
+                    await new pdfLib.TextLayer({
+                        textContentSource: pdfPages[i].streamTextContent(),
+                        container,
+                        viewport,
+                    }).render();
+                    /* The document's own hyperlinks, as real anchors. */
+                    for (const a of await pdfPages[i].getAnnotations()) {
+                        if (a.subtype !== 'Link' || !a.url) continue;
+                        const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(a.rect);
+                        const link = document.createElement('a');
+                        link.href = a.url;
+                        link.target = '_blank';
+                        link.rel = 'noopener';
+                        link.style.left = Math.min(x1, x2) + 'px';
+                        link.style.top = Math.min(y1, y2) + 'px';
+                        link.style.width = Math.abs(x2 - x1) + 'px';
+                        link.style.height = Math.abs(y2 - y1) + 'px';
+                        container.appendChild(link);
+                    }
+                }
+            }
+
+            async function sharpen() {
+                if (z === 1) {
+                    lenses.forEach((l) => { l.hidden = true; });
+                    return;
+                }
+                ensurePdf();
+                /* Only a settled, unrotated page is worth the glass. */
+                if (current > 0.02 && current < 0.98) return;
+                const idx = current < 0.5 ? 0 : 1;
+                const pg = pdfPages[idx];
+                if (!pg) return;
+                lenses[1 - idx].hidden = true;
+                const lens = lenses[idx];
+                const dpr = devicePixelRatio || 1;
+                const r = pile.getBoundingClientRect();
+                const cx = r.left + r.width / 2;
+                const cy = r.top + r.height / 2;
+                /* Screen corners, carried back into sheet coordinates. */
+                const backX = (sx) => (sx - cx - panX) / z + r.width / 2;
+                const backY = (sy) => (sy - cy - panY) / z + r.height / 2;
+                const pad = 48 / z;
+                const x0 = clamp(backX(0) - pad, 0, r.width);
+                const x1 = clamp(backX(innerWidth) + pad, 0, r.width);
+                const y0 = clamp(backY(0) - pad, 0, r.height);
+                const y1 = clamp(backY(innerHeight) + pad, 0, r.height);
+                if (x1 - x0 <= 0 || y1 - y0 <= 0) return;
+                const k = z * dpr;
+                scratch.width = Math.round((x1 - x0) * k);
+                scratch.height = Math.round((y1 - y0) * k);
+                const viewport = pg.getViewport({
+                    scale: (r.width / 612) * k,
+                    offsetX: -x0 * k,
+                    offsetY: -y0 * k,
+                });
+                await pg.render({ canvasContext: scratchCtx, viewport }).promise;
+                /* Landed: size, place and blit in one breath, so the swap is
+                   never seen mid-paint. */
+                lens.width = scratch.width;
+                lens.height = scratch.height;
+                lens.getContext('2d').drawImage(scratch, 0, 0);
+                lens.style.left = x0 + 'px';
+                lens.style.top = y0 + 'px';
+                lens.style.width = (x1 - x0) + 'px';
+                lens.style.height = (y1 - y0) + 'px';
+                lens.hidden = false;
+            }
+
+            /* #two deep-links to the second page: arrive with page one
+               already dealt away, without replaying the flight. */
+            one.classList.remove('selected');
+            if (location.hash === '#two') target = current = 1;
+            paint(current);
+            rest();
+
+            /* The entrance holds until the type has settled and the pile
+               itself has decoded — the paper is the page here, so painting
+               before it exists would be an entrance onto an empty desk. The
+               timeout is insurance against a font host that never answers. */
+            const arrive = () => document.documentElement.classList.add('ready');
+            /* The words and links want to be touchable without a zoom having
+               happened first, so the PDF comes in soon after the entrance. */
+            setTimeout(ensurePdf, 600);
+            document.fonts.ready.then(fitCounter);
+            Promise.all([
+                document.fonts.ready,
+                s1.querySelector('img').decode().catch(() => { }),
+            ]).then(arrive);
+            setTimeout(arrive, 1500);
+            /* Warm the under-page too, so the first deal never lands on a
+               page still being decoded. */
+            s2.querySelector('img').decode().catch(() => { });
+            /* And warm the lens ahead of need: once the page has loaded and
+               the browser has a free moment, fetch pdf.js and parse the PDF,
+               so the first pinch meets a renderer already standing instead
+               of a download just beginning. */
+            addEventListener('load', () => {
+                (self.requestIdleCallback || ((fn) => setTimeout(fn, 1000)))(() => ensurePdf());
+            }, { once: true });
+        })();
+    </script>
+</body>
+
+</html>
