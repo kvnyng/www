@@ -70,6 +70,11 @@
     /* The fade-out before a swap is deliberately faster than the fade-in:
        leaving should feel dismissed, arriving should feel placed. */
     --swap-out-duration: 160ms;
+    /* The same idea one scale up, for the whole page leaving rather than one
+       column of it. Longer than the swap because a room takes longer to empty
+       than a list does — and because this beat is also where the next
+       document's request is spent. */
+    --leave-duration: 220ms;
 }
 
 
@@ -782,6 +787,30 @@
     transition: opacity var(--swap-out-duration) ease-out;
 }
 
+
+/* ── Departure ──────────────────────────────────────────────────────────────
+   The entrance is only half of a page. A document that rises carefully into
+   place and is then cut off mid-sentence the moment a link is followed still
+   hands over abruptly — so following an internal link fades this one out
+   first, and the next one rises out of the dark it leaves behind.
+
+   Same gesture as the swap above, played by the whole page instead of one
+   column: out fast, in slow.
+
+   On body rather than on html, because body's background is the one
+   propagated to the canvas, and a propagated background is painted from the
+   property rather than from the element. Fading body therefore takes the
+   contents down and leaves the grey ground standing — and every page of this
+   site is the same grey, so the handover reads as a room emptying and
+   refilling rather than as a screen blanking.
+
+   Declared on the .is-leaving side only, like the swap, and for a simpler
+   reason: there is no coming back from it. */
+html.is-leaving body {
+    opacity: 0;
+    transition: opacity var(--leave-duration) ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
     :root {
         /* Keep a short cross-fade — the wait for fonts is still worth having,
@@ -790,6 +819,10 @@
         --reveal-duration: 200ms;
         --reveal-stagger: 0ms;
         --reveal-distance: 0px;
+        /* Kept for the same reason as the fade-in above — a hard cut between
+           two documents is a flash, which is the thing this setting is most
+           anxious about — but taken down to the length of a blink. */
+        --leave-duration: 120ms;
     }
 
     /* The stroke is the whole point of the press, and there's no version of it

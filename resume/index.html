@@ -31,8 +31,22 @@
     <link rel="stylesheet" href="style.css">
 
     <!-- Inline and synchronous on purpose: this has to land before the first
-         paint, or the page flashes at full opacity before the entrance runs. -->
-    <script>document.documentElement.classList.add('js-preload');</script>
+         paint, or the page flashes at full opacity before the entrance runs.
+
+         And conditional on where the reader came from: the hold-then-rise
+         exists to cross with the departure fade of the kvnyng.com page before
+         it. Arriving from anywhere else — a search result, a shared link, a
+         bare address — there was no fade on the other side, so there is no
+         hold on this one: the entrance plays from first paint instead of
+         after the fonts. An empty or opaque referrer throws in the URL
+         constructor and lands in the no-hold case, which is the right
+         reading of not knowing. -->
+    <script>
+        try {
+            if (new URL(document.referrer).origin === location.origin)
+                document.documentElement.classList.add('js-preload');
+        } catch (e) { }
+    </script>
 </head>
 
 <body>
@@ -680,17 +694,27 @@
             /* The entrance holds until the type has settled and the pile
                itself has decoded — the paper is the page here, so painting
                before it exists would be an entrance onto an empty desk. The
-               timeout is insurance against a font host that never answers. */
+               timeout is insurance against a stylesheet that never answers.
+
+               But only when there is a hold to lift: the head only sets
+               .js-preload when the reader stepped over from another page of
+               this site, whose departure fade this entrance completes. A
+               reader from elsewhere gets the rise from first paint, waiting
+               on nothing. */
             const arrive = () => document.documentElement.classList.add('ready');
             /* The words and links want to be touchable without a zoom having
                happened first, so the PDF comes in soon after the entrance. */
             setTimeout(ensurePdf, 600);
             document.fonts.ready.then(fitCounter);
-            Promise.all([
-                document.fonts.ready,
-                s1.querySelector('img').decode().catch(() => { }),
-            ]).then(arrive);
-            setTimeout(arrive, 1500);
+            if (document.documentElement.classList.contains('js-preload')) {
+                Promise.all([
+                    document.fonts.ready,
+                    s1.querySelector('img').decode().catch(() => { }),
+                ]).then(arrive);
+                setTimeout(arrive, 1500);
+            } else {
+                arrive();
+            }
             /* Warm the under-page too, so the first deal never lands on a
                page still being decoded. */
             s2.querySelector('img').decode().catch(() => { });
@@ -701,6 +725,92 @@
             addEventListener('load', () => {
                 (self.requestIdleCallback || ((fn) => setTimeout(fn, 1000)))(() => ensurePdf());
             }, { once: true });
+        })();
+    </script>
+    <!-- ── Departure ────────────────────────────────────────────────────────
+         The counterpart to the entrance. Every page of this site holds at
+         nothing and rises into place; without this, following a link cuts the
+         one you are on off where it stands, and the next begins its rise over
+         a screen that has already gone. So a click on an internal link fades
+         this document out first and only hands the URL over at the end of the
+         fade: the two cross on the grey they share rather than one replacing
+         the other mid-sentence.
+
+         Only the leaving is new. The arriving half is the entrance that was
+         already here.
+
+         The same twenty lines sit at the foot of the front page's index.html,
+         which is where the note explaining why they are copied rather than
+         shared lives too. -->
+    <script>
+        (() => {
+            const root = document.documentElement;
+
+            // The length lives in the stylesheet, beside the rule it drives, so
+            // the wait and the fade can't drift apart — and so the
+            // reduced-motion override shortens the two of them together.
+            const declared = getComputedStyle(root).getPropertyValue('--leave-duration').trim();
+            const LEAVE_MS = declared.endsWith('ms') ? parseFloat(declared) : parseFloat(declared) * 1000;
+
+            // Where following the link under this element would take the
+            // reader, if following it means replacing this document — and null
+            // if it doesn't. A new tab, a download, a link off the site, a
+            // fragment on this same page: all real navigations, none of them a
+            // departure, and swallowing one would break the link rather than
+            // dress it. An SVG <a> falls out here too, on the instanceof: its
+            // href isn't a string, and nothing on the site uses one.
+            function destinationOf(target) {
+                const link = target.closest && target.closest('a[href]');
+                if (!(link instanceof HTMLAnchorElement)) return null;
+                if (link.target && link.target !== '_self') return null;
+                if (link.hasAttribute('download')) return null;
+                const url = new URL(link.href);
+                if (url.origin !== location.origin) return null;
+                if (url.pathname === location.pathname && url.search === location.search) return null;
+                return url.href;
+            }
+
+            // A middle click, a modified click, a click something else has
+            // already claimed: the browser has its own plans for those.
+            const isPlainClick = event =>
+                !event.defaultPrevented && event.button === 0
+                && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+
+            // Warm the destination on the way to the click. The fade is a fixed
+            // length; the request behind it is not, and an unwarmed one leaves
+            // the reader looking at an empty room for however long the network
+            // takes. Asked for on hover — and on the first touch, which arrives
+            // as one — the document is usually already in hand by the time the
+            // fade is over. The same move the view swap makes by fetching and
+            // fading at once. A browser that ignores the hint just asks at
+            // navigation time, which is where it began.
+            const warmed = new Set();
+            addEventListener('pointerover', event => {
+                const href = destinationOf(event.target);
+                if (!href || warmed.has(href)) return;
+                warmed.add(href);
+                const hint = document.createElement('link');
+                hint.rel = 'prefetch';
+                hint.href = href;
+                document.head.appendChild(hint);
+            });
+
+            addEventListener('click', event => {
+                if (!isPlainClick(event)) return;
+                const href = destinationOf(event.target);
+                if (!href) return;
+                event.preventDefault();
+                root.classList.add('is-leaving');
+                setTimeout(() => { location.href = href; }, LEAVE_MS);
+            });
+
+            // Step back into a page the browser kept whole and it is handed
+            // back exactly as it was left — faded to nothing, halfway out the
+            // door. Nothing else clears the class, because on an ordinary load
+            // nothing carries it in.
+            addEventListener('pageshow', event => {
+                if (event.persisted) root.classList.remove('is-leaving');
+            });
         })();
     </script>
 </body>

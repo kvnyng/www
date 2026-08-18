@@ -25,6 +25,9 @@
     --reveal-duration: 560ms;
     --reveal-stagger: 60ms;
     --reveal-distance: 12px;
+    /* How long the page takes to leave when a link out of it is followed —
+       see the departure block at the foot of this file. */
+    --leave-duration: 220ms;
 }
 
 * {
@@ -445,5 +448,33 @@ html.ready .rise {
     html.ready .rise {
         animation-duration: 1ms;
         animation-delay: 0ms;
+    }
+}
+
+
+/* ── Departure ──────────────────────────────────────────────────────────
+   The other half of the entrance, and the same one the front page carries.
+   The crumb back to the front page fades this document out before handing
+   the URL over, so the two cross in the dark instead of one being cut off
+   where it stood.
+
+   On body rather than on html: body's background is the one propagated to
+   the canvas, and a propagated background is painted from the property
+   rather than from the element — so fading body takes the pile and the
+   crumb down and leaves the grey ground standing. The front page is the
+   same grey, which is what makes the handover a room changing rather than
+   a screen blanking.
+
+   Declared on the .is-leaving side only. There is no coming back from it. */
+html.is-leaving body {
+    opacity: 0;
+    transition: opacity var(--leave-duration) ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        /* Short rather than absent: a hard cut between two documents is a
+           flash, which is the thing this setting minds most. */
+        --leave-duration: 120ms;
     }
 }
