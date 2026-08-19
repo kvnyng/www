@@ -202,6 +202,18 @@ header {
     will-change: auto;
 }
 
+/* Except while a touch gesture is mid-flight. A compositor with its pins
+   off re-rasters when the scale moves — the point at rest, and the ruin
+   during a pinch: sixty re-rasters a second of two vector sheets is the
+   jank a phone reports. So the glide (applyZoom in the script) pins the
+   layers back for exactly as long as a finger is writing, and the settle
+   lifts them again alongside its crisp relayout. The stretch while moving
+   is the price; the words redrawn at size a beat after the hand rests are
+   the refund. One class deeper than the lift above, so it outweighs it. */
+.scene.zoomed.gliding :is(.zoomer, .grab, .sheet) {
+    will-change: transform;
+}
+
 /* A box around the picture and nothing else, and the whole of the glass's
    sharpness hangs off it — see the note in the script. Under the glass this
    wrapper is given the magnification as `zoom`, a layout property, and the

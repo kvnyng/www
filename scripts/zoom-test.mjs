@@ -1313,6 +1313,104 @@ async function main() {
         }
     }
 
+    /* ── 3f. the glide: a finger must not pay the wheel's bill ────────── */
+
+    /* The wheel relays out both sheets on every frame, and this machine
+       affords it — barely, at ~7ms of an 8ms bar — while a phone is several
+       times slower with three device pixels to the css one. So a touch
+       gesture glides: transform only while it moves, pins back on so the
+       compositor is never asked to re-raster mid-flight, and the crisp
+       layout lands at the settle with the fingers still down. Driven as
+       real touch events, because nothing about a wheel exercises the path.
+       Touch emulation goes on only here and comes off after: the page
+       snapshots (pointer: coarse) at load, so nothing measured elsewhere
+       moves — but leaving it on would be a lie about the machine. */
+    if (calibrated) {
+        try {
+            await escape();
+            await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+            await cdp.send('Performance.enable');
+            const taskNow = async () => {
+                const { metrics } = await cdp.send('Performance.getMetrics');
+                const m = metrics.find((x) => x.name === 'TaskDuration');
+                return m ? m.value : null;
+            };
+            const tp = (d) => [
+                { x: 640 - d / 2, y: 550, id: 1 },
+                { x: 640 + d / 2, y: 550, id: 2 },
+            ];
+            const touch = (type, touchPoints) =>
+                cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+
+            /* 100px of spread to 700 over 36 moves: a two-finger climb to
+               about 7x, sampled once in the middle. */
+            const MOVES = 36;
+            await touch('touchStart', tp(100));
+            const tA = await taskNow();
+            let mid = null;
+            for (let i = 1; i <= MOVES; i++) {
+                await touch('touchMove', tp(100 + (700 - 100) * (i / MOVES)));
+                if (i === 24) {
+                    mid = {
+                        contract: await evaluate('window.__bench.contract()'),
+                        pins: await evaluate('window.__bench.pins()'),
+                        gliding: await evaluate(
+                            `document.querySelector('.scene').classList.contains('gliding')`),
+                    };
+                }
+                await sleep(16);
+            }
+            const tB = await taskNow();
+            const perMove = (tA === null || tB === null) ? null : ((tB - tA) * 1000) / MOVES;
+
+            const midOk = mid && mid.contract.zoomerScale > 2 && mid.gliding === true &&
+                mid.contract.papers.length === 2 &&
+                mid.contract.papers.every((pp) => pp.zoom === 1 && !pp.inlineWidth) &&
+                flat(mid.pins).every((v) => v === 'transform');
+            check('glide: mid-pinch the layout is untouched and the pins are back on',
+                midOk,
+                mid ? `${placement(mid.contract)} gliding=${mid.gliding} pins=${JSON.stringify(mid.pins)}`
+                    : 'no mid-gesture sample');
+
+            check(`glide cost: ${perMove === null ? '?' : perMove.toFixed(2)}ms of main thread per touch move (want <= 2)`,
+                perMove !== null && perMove <= 2,
+                `${MOVES} touch moves cost ${perMove === null ? '?' : perMove.toFixed(2)}ms each — a glide is one ` +
+                `transform write, and anything near the wheel's ~7ms means the layout is being paid mid-gesture again`);
+
+            /* The hand stops but does not lift: the settle must crisp under
+               resting fingers, not wait for them to leave. */
+            await sleep(SETTLE_MS + 300);
+            const held = {
+                contract: await evaluate('window.__bench.contract()'),
+                gliding: await evaluate(
+                    `document.querySelector('.scene').classList.contains('gliding')`),
+            };
+            const heldFaults = contractFaults(held.contract);
+            const data = await capture();
+            const m = await measure(data);
+            const path = await save('glide-settled.png', data);
+            const w = m.edgeWidthMedian;
+            check(`glide settle: fingers still down, paper laid out at z, ${w === null ? 'n/a' : w.toFixed(2) + 'px'} (want <= ${CRISP_MAX.z8})`,
+                heldFaults.length === 0 && held.gliding === false &&
+                w !== null && m.edgeWidthN >= MIN_EDGES && w <= CRISP_MAX.z8,
+                `${heldFaults.join('; ') || 'contract ok'} | gliding=${held.gliding} | ` +
+                `median ${w === null ? 'n/a' : w.toFixed(2) + 'px'} over ${m.edgeWidthN} edges; see ${path}`);
+            note(`  glide: ${perMove === null ? '?' : perMove.toFixed(2)}ms/move mid-gesture, settled to ${placement(held.contract)}`);
+
+            /* touchEnd lists the points being released. */
+            await touch('touchEnd', tp(700));
+        } catch (e) {
+            notOk('glide: touch gestures defer layout to the settle', String(e.message || e));
+        } finally {
+            try { await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false }); } catch { }
+            await escape();
+        }
+    } else {
+        skip('glide: mid-pinch layout untouched, pins back on', uncalibrated);
+        skip('glide cost per touch move', uncalibrated);
+        skip('glide settle crisps under resting fingers', uncalibrated);
+    }
+
     /* ── 3d. the phase regression ─────────────────────────────────────── */
 
     /* The last thing between this page and the browser's own zoom was never
