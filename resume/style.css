@@ -197,6 +197,29 @@ header {
     will-change: auto;
 }
 
+/* A box around the picture and nothing else, and the whole of the glass's
+   sharpness hangs off it — see the note in the script. Under the glass this
+   wrapper is given the magnification as `zoom`, a layout property, and the
+   exact inverse of it as a transform; the two cancel on screen, so the ink
+   ends up laid out at sixty-four times inside a layer that is drawn at one.
+   Which means the picture is rasterised from its curves at the size it is
+   actually being read at, rather than stretched from the size it happened to
+   be drawn at first.
+
+   It has to be the picture alone. Wrapping the words or the washes as well
+   would put them through a layout on every frame of a pinch, and measured,
+   that is the difference between two milliseconds a frame and nine. They
+   stay outside, riding the glass's own transform as they always have.
+
+   transform-origin so the inverse scales from the same corner `zoom` grows
+   from; absolute so the box is the sheet exactly, and so it keeps painting
+   above the aura the way the bare image used to. */
+.paper {
+    position: absolute;
+    inset: 0;
+    transform-origin: 0 0;
+}
+
 /* The pages are pdftocairo's SVG tracings of the real PDF — every glyph a
    path, so the type is the resume's own, not a webfont approximation, and it
    stays crisp at any size. The ink sits on transparent ground; the white

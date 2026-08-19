@@ -88,13 +88,15 @@
                     <div class="grab">
                         <div class="sheet s2">
                             <div class="aura"></div>
-                            <img src="page-2.svg" alt="Resume, page two" width="612" height="792">
+                            <div class="paper"><img src="page-2.svg" alt="Resume, page two" width="612"
+                                    height="792"></div>
                             <div class="textlayer"></div>
                             <div class="dim"></div>
                         </div>
                         <div class="sheet s1">
                             <div class="aura"></div>
-                            <img src="page-1.svg" alt="Resume, page one" width="612" height="792">
+                            <div class="paper"><img src="page-1.svg" alt="Resume, page one" width="612"
+                                    height="792"></div>
                             <div class="textlayer"></div>
                         </div>
                     </div>
@@ -136,6 +138,7 @@
             .pile { aspect-ratio: auto; width: min(92vw, 38rem); }
             .grab { position: static; cursor: default; }
             .sheet { position: static; }
+            .paper { position: static; }
             .sheet img { height: auto; margin-bottom: 2rem; }
             .s2 { transform: none; }
             .aura, .dim { display: none; }
@@ -154,6 +157,7 @@
             const dim = s2.querySelector('.dim');
             const grab = document.querySelector('.grab');
             const arm = document.querySelector('.tools-arm');
+            const papers = document.querySelectorAll('.paper');
             const one = document.querySelector('.counter .one');
             const live = document.querySelector('.counter .live');
             const status = document.querySelector('[role="status"]');
@@ -200,11 +204,24 @@
             let overTarget = 0;
             let overCurrent = 0;
 
-            /* Measured once and on resize, never per event. */
+            /* Measured once and on resize, never per event. The pile's own box
+               is in here for a sharper reason than tidiness: under the glass
+               the paper is restyled on every frame of the gesture, and a
+               layout read taken after a write is a reflow the browser has to
+               do on the spot. One of those per wheel tick is the difference
+               between a pinch that glides and one that grinds. Nothing under
+               the glass moves these numbers — the sheets scale inside a pile
+               whose own box never changes. */
             let W = 0, H = 0;
+            let pileW = 0, pileH = 0, pileLeft = 0, pileTop = 0;
             function measure() {
                 W = innerWidth;
                 H = innerHeight;
+                const r = pile.getBoundingClientRect();
+                pileW = r.width;
+                pileH = r.height;
+                pileLeft = r.left;
+                pileTop = r.top;
             }
             measure();
 
@@ -374,7 +391,12 @@
             }
             const kick = () => { if (raf === null) raf = requestAnimationFrame(step); };
 
-            addEventListener('resize', () => { measure(); kick(); buildTextLayers(); });
+            /* applyZoom among these because a settled glass is holding the
+               sheet at a size in pixels, and the pile it was measured from
+               has just changed: the write drops back to the transform and
+               re-arms the settle, which measures again once the dragging of
+               the window has stopped. */
+            addEventListener('resize', () => { measure(); kick(); applyZoom(); buildTextLayers(); });
 
             /* The pile is at rest on a page: tell the world which. */
             function announce() {
@@ -510,16 +532,48 @@
             let panning = false, panned = false, lx = 0, ly = 0;
             let zoomIdle = null;
 
+            /* One write for the glass, and it says the same thing twice in
+               two languages: the whole handful is scaled by the transform,
+               and the paper inside it is scaled by layout and unscaled again
+               by transform. See the note below the fold. */
             const writeZoom = () => {
-                zoomer.style.transform = z === 1 ? '' :
+                if (z === 1) {
+                    /* Put down clean, so the deal gets its paper back exactly
+                       as the stylesheet describes it. */
+                    zoomer.style.transform = '';
+                    for (const p of papers) {
+                        p.style.zoom = '';
+                        p.style.width = '';
+                        p.style.height = '';
+                        p.style.transform = '';
+                        p.style.willChange = '';
+                    }
+                    return;
+                }
+                zoomer.style.transform =
                     `translate3d(${panX}px, ${panY}px, 0) scale(${z})`;
+                for (const p of papers) {
+                    /* `zoom` needs a real length to work on: the inset:0 the
+                       stylesheet gives this box resolves inside the zoomed
+                       coordinate space and cancels the magnification out
+                       exactly, leaving the picture the size it already was.
+                       Handing it the pile's own pixels over-constrains the
+                       box, which is what lets right and bottom go. */
+                    p.style.width = pileW + 'px';
+                    p.style.height = pileH + 'px';
+                    p.style.zoom = z;
+                    /* And the inverse, on its own layer, so what the glass
+                       magnifies this one shrinks back to nothing. */
+                    p.style.transform = `scale(${1 / z}) translateZ(0)`;
+                    p.style.willChange = 'transform';
+                }
             };
 
             function applyZoom() {
                 /* The pan is leashed to the zoom: enough travel to reach any
                    corner of the enlarged sheet, never enough to lose it. */
-                const mx = (z - 1) * pile.offsetWidth * 0.75;
-                const my = (z - 1) * pile.offsetHeight * 0.75;
+                const mx = (z - 1) * pileW * 0.75;
+                const my = (z - 1) * pileH * 0.75;
                 panX = clamp(panX, -mx, mx);
                 panY = clamp(panY, -my, my);
                 writeZoom();
@@ -537,38 +591,52 @@
                 if (z !== 1) zoomIdle = setTimeout(settleZoom, 150);
             }
 
-            /* ── The half pixel ───────────────────────────────────────────
-               The transform rasters at native scale: hold the view still and
-               the crop is the same bytes the browser's own page zoom makes of
-               the same sheet, to the byte. What is left is where the layer
-               lands. Off the device grid, the compositor no longer has curves
-               to draw — it has a finished bitmap it must set down between
-               pixels, two taps wide, so every edge in the type takes on half a
-               pixel of its neighbour's ink. That is the whole of the residual
-               softness, and it is a matter of phase, not scale: an edge
-               measures 1.47px across at a whole-pixel offset and 2.20px at
-               half of one.
+            /* ── Why the paper is scaled twice ────────────────────────────
+               A transform is the natural way to build a glass, and on its own
+               it is not enough. The scale then belongs to the compositor,
+               which is holding a picture it has already drawn, and whether it
+               throws that picture away and goes back to the vectors at the new
+               size is its own affair. Chrome does, handsomely. Nothing else
+               was ever measured here, and a reader whose engine declines is
+               left reading stretched pixels — which is exactly the report
+               that started this.
 
-               So when the hand goes quiet the sheet's own corner is rounded
-               onto the grid. At most half a device pixel, once, a sixth of a
-               second after the last write — too small and too late to read as
-               motion, and the picture comes up sharp. It hangs off applyZoom,
-               the one door every zoom and pan passes through, so Safari's
-               gesture events are settled by the same string without being
-               wired to it. And it writes the transform itself instead of
-               going back through applyZoom, so a settle can never arm a
-               settle: the nudge is idempotent, but the loop is what would
-               have cost, and it is simply not built. The leash is left alone
-               — half a device pixel cannot walk the sheet off its tether. */
+               So the magnification is also said in a language that cannot be
+               declined. `zoom` is a layout property: a box given zoom 64 is
+               measured, laid out and rasterised at sixty-four times, with no
+               smaller bitmap behind it to be stretched from. Say it on the
+               paper, and say the exact inverse of it as a transform on the
+               same box, and the two cancel — the picture's place on screen is
+               unchanged, decided as before by the glass's own scale, while
+               the ink inside it is drawn from its curves at the size it is
+               being read at. Sharpness stops being a favour and becomes a
+               fact about the boxes.
+
+               It is only the picture that is wrapped, and that is the whole
+               economy of it. The words, the washes and the shade stay outside
+               and ride the glass's transform as they always did; a layout on
+               every frame of a pinch costs two milliseconds when it is one
+               wrapper and one image, and nine when three hundred and fifty
+               spans of invisible text come with it. Measured, both.
+
+               Which leaves the settle below, and it changes nothing about how
+               the glass works — it squares the pan onto the device grid, and
+               that is all. A layer set down between pixels is pushed through a
+               two-tap filter and every edge takes half a pixel of its
+               neighbour's ink: an edge measures 1.47px across on the grid
+               against 2.20px half a pixel off it. At most half a device pixel
+               of nudge, a sixth of a second after the hand stops, folded back
+               into the pan so the next gesture starts from where this one
+               landed. It hangs off applyZoom, the single door every zoom and
+               pan passes through, so Safari's own gesture events are settled
+               by the same string without being wired to it — and it reaches
+               writeZoom rather than applyZoom, so a settle can never arm
+               another. */
             function settleZoom() {
                 if (z === 1) return;
-                const r = pile.getBoundingClientRect();
                 const dpr = devicePixelRatio || 1;
-                /* Where the sheet's top-left corner is on screen: the pile is
-                   untransformed — the zoom lives on its child — so the corner
-                   has to be carried out through the scale by hand. */
-                const sx = r.left + r.width / 2 + panX - (r.width / 2) * z;
-                const sy = r.top + r.height / 2 + panY - (r.height / 2) * z;
+                const sx = pileLeft + pileW / 2 + panX - (pileW / 2) * z;
+                const sy = pileTop + pileH / 2 + panY - (pileH / 2) * z;
                 panX += Math.round(sx * dpr) / dpr - sx;
                 panY += Math.round(sy * dpr) / dpr - sy;
                 writeZoom();
@@ -586,10 +654,13 @@
                    for one — float32 eventually stops being able to say where
                    a corner of the page is. */
                 nz = clamp(nz, 1, 256);
-                /* Keep the point under the cursor under the cursor. */
-                const r = pile.getBoundingClientRect();
-                const sx = cx - (r.left + r.width / 2);
-                const sy = cy - (r.top + r.height / 2);
+                /* Keep the point under the cursor under the cursor — off the
+                   measured box, not a fresh one: this runs on every event of
+                   a pinch, and asking the layout a question here would make
+                   the browser settle the style we just wrote before it could
+                   answer. */
+                const sx = cx - (pileLeft + pileW / 2);
+                const sy = cy - (pileTop + pileH / 2);
                 panX = sx - ((sx - panX) / z) * nz;
                 panY = sy - ((sy - panY) / z) * nz;
                 z = nz;

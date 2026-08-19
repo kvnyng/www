@@ -38,22 +38,27 @@ const PROFILE = join(OUT, `chrome-profile-${process.pid}-${Date.now().toString(3
 /* The verdict bars. The second lab settled what this page can actually do: a
  * settled transform rasters byte-identical to the browser's own zoom, and the
  * only thing that ever separates them is where the layer origin falls between
- * device pixels. That is true — but it is not equally legible at every zoom.
- * Measured here on this page, snap disabled, sub-pixel phase swept a full
- * device pixel in quarter steps:
+ * device pixels.
+ *
+ * Two eras of measurement stand behind these numbers. While the zoom rode the
+ * compositor's transform, what the page could achieve depended on the zoom —
+ * phase swept a full device pixel in quarter steps, snap disabled:
  *
  *     phase      0.00   0.25   0.50   0.75
- *     z=256      1.61   1.91   2.15   1.88     <- phase is the whole story
- *     z=8.3      2.37   2.30   2.20   2.30     <- content is, and phase is 0.17
+ *     z=256      1.61   1.91   2.15   1.88     <- phase was the whole story
+ *     z=8.3      2.37   2.30   2.20   2.30     <- content was, phase worth 0.17
  *
- * Blown up to 256x, a stem fills the screen and the only thing left to measure
- * is where its edge falls between device pixels — so the floor is real, the
- * half-pixel penalty is plain, and 2.0 separates them cleanly. At 8x the crop
- * is dense body type whose curved and diagonal edges cross more pixels per row
- * no matter where the layer sits; 2.2 is what that content measures at its
- * best, and a 2.0 bar there would fail a page doing everything right. So the
- * bar is per zoom, and the phase regression is caught where phase is legible. */
-const CRISP_MAX = { z8: 3.0, z64: 3.0, z256: 2.0 };
+ * At 256x a stem filled the screen and only its sub-pixel phase was left to
+ * measure; at 8x dense body type crossed more pixels per row whatever the
+ * layer did, and 2.2px was simply what that content came to.
+ *
+ * The settle swap ended the split. A beat after the hand stops, the zoom moves
+ * off the transform onto CSS zoom on .grab, and layout scale is not
+ * discretionary — the renderer rasterizes at size rather than deciding whether
+ * to. Measured once that landed, every zoom sits on the same floor: 1.74px at
+ * 8x, 1.61px at 64x, 1.63px at 256x. So one bar serves all three, and the
+ * transform era's 2.2px is history rather than a limit. */
+const CRISP_MAX = { z8: 2.0, z64: 2.0, z256: 2.0 };
 
 /* The bar the phase test holds the settled page to, at the zoom where a
  * half-device-pixel offset is worth half a pixel of blur. */
@@ -82,11 +87,23 @@ const SNAP_WAIT_MS = 600;
  * frame. Either way, move and look again. */
 const MIN_EDGES = 20;
 
-/* What the negative control demands of a deliberately re-pinned layer. The
- * model says z × 1.4, so a shade over 8x should read near 11px; anything
- * under this floor means the metric cannot see a smear it is standing in
- * front of, and every crisp verdict it gave is worthless. */
-const NEG_FLOOR = 8;
+/* What the blindness control demands of two staged pixels of blur. A Gaussian
+ * of that radius spreads a step over roughly ten device pixels at dpr 2, so a
+ * metric in working order reads far past this; anything under it means the
+ * bench cannot see blur it is standing in front of, and every crisp verdict it
+ * gave is worthless. */
+const BLUR_FLOOR = 6;
+
+/* The bar a moving page is held to. The settled floor is 2.0, and this is the
+ * same claim with room for the shutter: a screenshot of a gesture can land
+ * part-way through a paint, and that costs a little width without meaning the
+ * page was soft. */
+const MID_MAX = 2.5;
+
+/* Per-frame main-thread cost of a continuous layout-scale gesture. A frame is
+ * 16.7ms; past half of it spent in script and layout the gesture is no longer
+ * keeping up, and that is jank the reader feels. */
+const FRAME_MS_MAX = 8;
 
 /* Where the bench looks when the crop comes back empty. Nudges accumulate, so
  * these compose into a square spiral with a widening leg — at 256x a whole
@@ -453,18 +470,155 @@ window.__bench = (() => {
         };
     }
 
+    async function decode(dataUrl) {
+        const img = new Image();
+        img.src = dataUrl;
+        await img.decode();
+        return img;
+    }
+    function lumOf(img, x, y, w, h) {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const g = c.getContext('2d', { willReadFrequently: true });
+        g.drawImage(img, x, y, w, h, 0, 0, w, h);
+        const d = g.getImageData(0, 0, w, h).data;
+        const lum = new Float64Array(w * h);
+        for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+            lum[p] = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        }
+        return lum;
+    }
+
     const zoomer = () => document.querySelector('.zoomer');
+    const grab = () => document.querySelector('.grab');
+
+    /* The zoom lives in one of two places now. During a gesture it is a scale
+       on the .zoomer transform, where the compositor can carry it for free;
+       once the hand stops, the page swaps it onto CSS zoom on .grab — a
+       layout-scale, which the renderer must rasterize at size rather than
+       choosing to. So "what is the zoom" is the product of the two, and any
+       reading that looks at only one of them is right half the time. */
+    function matrixOf(el) {
+        const t = el ? getComputedStyle(el).transform : 'none';
+        if (!t || t === 'none') return { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+        const m = t.match(/matrix(3d)?\\(([^)]+)\\)/);
+        if (!m) return { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+        const p = m[2].split(',').map(Number);
+        return m[1]
+            ? { a: p[0], b: p[1], c: p[4], d: p[5], tx: p[12], ty: p[13] }
+            : { a: p[0], b: p[1], c: p[2], d: p[3], tx: p[4], ty: p[5] };
+    }
+    function zoomOf(el) {
+        if (!el) return 1;
+        const v = parseFloat(getComputedStyle(el).zoom);
+        return Number.isFinite(v) && v > 0 ? v : 1;
+    }
 
     return {
+        /* The scale carried by the transform alone — what the gesture writes. */
+        zTransform() {
+            const el = zoomer();
+            return el ? matrixOf(el).a : null;
+        },
+        /* The effective zoom, whichever mode the page is in. */
         z() {
             const el = zoomer();
             if (!el) return null;
-            const t = getComputedStyle(el).transform;
-            if (!t || t === 'none') return 1;
-            const m = t.match(/matrix3?d?\\(([^)]+)\\)/);
-            if (!m) return 1;
-            return Number(m[1].split(',')[0]);
+            return matrixOf(el).a * zoomOf(grab());
         },
+        /* Where the scale is actually living, as observed rather than as
+           assumed. The mechanism is in flux — a transform scale during the
+           gesture, CSS zoom on .grab at settle, a .paper wrapper carrying
+           zoom with a counter-scale — so this reports what it finds and
+           leaves the judging to the outcome tests. */
+        mode() {
+            const m = matrixOf(zoomer());
+            const gz = zoomOf(grab());
+            const scaled = Math.abs(m.a - 1) > 1e-3;
+            const zoomed = Math.abs(gz - 1) > 1e-3;
+            return {
+                grabZoom: gz,
+                scale: m.a,
+                paper: [...document.querySelectorAll('.paper')].map((el) => ({
+                    zoom: zoomOf(el), scale: matrixOf(el).a,
+                })),
+                tx: m.tx, ty: m.ty,
+                /* A translation-only matrix is what the zoomer should hold once
+                   the scale has moved to CSS zoom. */
+                pureTranslation: Math.abs(m.a - 1) < 1e-3 && Math.abs(m.d - 1) < 1e-3 &&
+                    Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6,
+                effective: m.a * gz,
+                mode: zoomed && !scaled ? 'zoom'
+                    : scaled && !zoomed ? 'transform'
+                        : !scaled && !zoomed ? 'rest' : 'mixed',
+            };
+        },
+        /* The mechanism, read in one synchronous pass so every part of it is
+           from the same frame. The scale is carried three ways at once and
+           they have to agree: the glass magnifies by z, each sheet of paper is
+           laid out at z through CSS zoom, and the same paper is scaled back by
+           1/z so the magnification lands on a box rasterized at size rather
+           than on a stretched picture of one. */
+        contract() {
+            const zEl = zoomer();
+            const pile = document.querySelector('.pile');
+            return {
+                zoomerScale: zEl ? matrixOf(zEl).a : null,
+                zoomerTransform: zEl ? getComputedStyle(zEl).transform : 'none',
+                zoomerInline: zEl ? zEl.style.transform : '',
+                grabZoom: zoomOf(grab()),
+                pileW: pile ? pile.getBoundingClientRect().width : null,
+                papers: [...document.querySelectorAll('.paper')].map((el) => ({
+                    zoom: zoomOf(el),
+                    scale: matrixOf(el).a,
+                    transform: getComputedStyle(el).transform,
+                    inlineWidth: el.style.width,
+                })),
+            };
+        },
+        /* A gesture the bench can photograph while it is still happening.
+           The burst is left running on the page and its promise parked on
+           window, so the harness can come back mid-flight, take a screenshot
+           of a moving page, and only then wait for it to finish. That is the
+           whole point now: the zoom is a layout scale on every frame, so the
+           picture is supposed to be sharp during the movement, not merely
+           after it. */
+        burst(opts) {
+            const st = { done: false, ticks: 0, z: window.__bench.z(), samples: [] };
+            window.__burst = st;
+            const wait = opts.raf
+                ? () => new Promise((r) => requestAnimationFrame(() => r()))
+                : () => new Promise((r) => setTimeout(r, opts.spacing));
+            window.__burstPromise = (async () => {
+                for (let i = 0; i < opts.ticks; i++) {
+                    if (opts.kind === 'zoom') {
+                        const up = opts.reverseAt === undefined || i < opts.reverseAt;
+                        window.__bench.wheel({ ctrlKey: true, deltaY: up ? -8 : 8 });
+                    } else {
+                        window.__bench.wheel({ deltaX: opts.dx || 0, deltaY: opts.dy || 0 });
+                    }
+                    st.ticks++;
+                    /* Reading the zoom back costs a style flush, so the cost
+                       run does without it: that overhead is the bench's, and
+                       charging it to the page would be a lie. */
+                    if (!opts.quiet) st.z = window.__bench.z();
+                    if (opts.sample) st.samples.push(window.__bench.mode());
+                    await wait();
+                }
+                st.done = true;
+                return { ticks: st.ticks, z: st.z, samples: st.samples };
+            })();
+            return true;
+        },
+        burstState() {
+            const st = window.__burst;
+            if (!st) return null;
+            return {
+                done: st.done, ticks: st.ticks, z: st.z,
+                mode: window.__bench.mode(), contract: window.__bench.contract(),
+            };
+        },
+        awaitBurst() { return window.__burstPromise; },
         zoomed() {
             const s = document.querySelector('.scene');
             return !!s && s.classList.contains('zoomed');
@@ -492,6 +646,26 @@ window.__bench = (() => {
         /* Puts the pins back exactly as the stylesheet used to ship them —
            the regression the pivot exists to prevent, staged on purpose so
            the bench can prove it would notice. */
+        /* Blur the glass on purpose. The bench used to prove it could see a
+           smear by staging one out of the page's own machinery; with the zoom
+           carried by layout at every moment there is no longer a way to make
+           the page render badly, which is the good news the resilience test
+           reports. So the blindness control stops depending on the mechanism
+           and simply puts two pixels of blur on the glass: if the metric
+           cannot see that, it cannot see anything. */
+        blurGrab(on) {
+            const id = '__bench_blur';
+            const had = document.getElementById(id);
+            if (on && !had) {
+                const st = document.createElement('style');
+                st.id = id;
+                st.textContent = '.grab { filter: blur(2px) !important; }';
+                document.head.appendChild(st);
+            } else if (!on && had) {
+                had.remove();
+            }
+            return !!document.getElementById(id);
+        },
         repin(on) {
             const id = '__bench_repin';
             const had = document.getElementById(id);
@@ -531,25 +705,44 @@ window.__bench = (() => {
         /* The screenshot comes back as a data URL, is decoded by the browser
            that drew it, and is measured over the middle CROP square. */
         async measure(dataUrl, crop) {
-            const img = new Image();
-            img.src = dataUrl;
-            await img.decode();
+            const img = await decode(dataUrl);
             const cw = Math.min(crop, img.naturalWidth);
             const ch = Math.min(crop, img.naturalHeight);
             const sx = Math.floor((img.naturalWidth - cw) / 2);
             const sy = Math.floor((img.naturalHeight - ch) / 2);
-            const c = document.createElement('canvas');
-            c.width = cw; c.height = ch;
-            const g = c.getContext('2d', { willReadFrequently: true });
-            g.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
-            const d = g.getImageData(0, 0, cw, ch).data;
-            const lum = new Float64Array(cw * ch);
-            for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-                lum[p] = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-            }
-            const m = sharpness(cw, ch, lum);
+            const m = sharpness(cw, ch, lumOf(img, sx, sy, cw, ch));
             m.crop = cw + 'x' + ch;
             return m;
+        },
+        /* Two frames of the same view — one taken mid-gesture, one after the
+           settle has swapped modes — and the question of whether the picture
+           moved between them. Best integer shift by absolute difference over
+           the middle, because a shift is exactly what the eye would read as a
+           jump at settle. */
+        async align(a, b, crop, radius) {
+            const [ia, ib] = await Promise.all([decode(a), decode(b)]);
+            const W = ia.naturalWidth, H = ia.naturalHeight;
+            const cw = Math.min(crop, W - 2 * radius, H - 2 * radius);
+            const ax = Math.floor((W - cw) / 2), ay = Math.floor((H - cw) / 2);
+            const bw = cw + 2 * radius;
+            const la = lumOf(ia, ax, ay, cw, cw);
+            const lb = lumOf(ib, ax - radius, ay - radius, bw, bw);
+            let best = null;
+            for (let dy = -radius; dy <= radius; dy++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    let sad = 0;
+                    for (let y = 0; y < cw; y += 2) {
+                        const ra = y * cw;
+                        const rb = (y + dy + radius) * bw + (dx + radius);
+                        for (let x = 0; x < cw; x += 2) sad += Math.abs(la[ra + x] - lb[rb + x]);
+                    }
+                    if (best === null || sad < best.sad) best = { dx, dy, sad };
+                }
+            }
+            best.perPx = best.sad / ((cw / 2) * (cw / 2));
+            best.crop = cw;
+            best.shift = Math.max(Math.abs(best.dx), Math.abs(best.dy));
+            return best;
         },
         textLayer() {
             return {
@@ -571,6 +764,9 @@ const errors = [];
 const ignored = [];
 const latency = {};
 const sharp = {};
+const midSharp = {};
+let frameCost = null;
+let panCost = null;
 const shots = [];
 
 let server = null, chrome = null, cdp = null;
@@ -734,6 +930,63 @@ async function main() {
         flat(restored).length >= 3 && flat(restored).every((v) => v === 'transform'),
         `got ${JSON.stringify(restored)}`);
 
+    /* Where the scale is sitting. Now that the mechanism is settled this is
+       both telemetry and a contract, so the same reading serves the note and
+       the verdict. */
+    const placement = (c) => `zoomer scale ${c.zoomerScale === null ? '?' : c.zoomerScale.toFixed(3)}, ` +
+        `.grab zoom ${c.grabZoom.toFixed(3)}, ` +
+        (c.papers.length
+            ? c.papers.map((x) => `paper zoom ${x.zoom.toFixed(3)} x scale ${x.scale.toFixed(4)}`).join(' + ')
+            : 'no .paper');
+
+    /* The mode contract, checked against the zoom the glass itself is carrying
+       so a moving gesture is judged against the frame it was caught in rather
+       than against a number from before the shutter opened. Three carriers of
+       one scale: the glass magnifies by z, each paper is laid out at z, and
+       the same paper is scaled back by 1/z so what gets magnified is a box
+       rasterized at size. If those three ever disagree the picture is either
+       the wrong size or the wrong sharpness. */
+    function contractFaults(c, expectZ) {
+        const f = [];
+        if (c.zoomerScale === null) return ['no .zoomer element'];
+        const z = c.zoomerScale;
+        const near = (a, b, tol) => Math.abs(a - b) <= tol;
+        const rel = (a, b, r) => Math.abs(a - b) <= Math.abs(b) * r;
+
+        if (c.grabZoom !== 1) f.push(`.grab zoom is ${c.grabZoom}, but that machinery is gone`);
+
+        if (z > 1.0001) {
+            if (expectZ !== undefined && !near(z, expectZ, Math.max(0.05, expectZ * 0.02))) {
+                f.push(`zoomer scale ${z.toFixed(3)} is not the expected ${expectZ.toFixed(3)}`);
+            }
+            if (c.papers.length !== 2) f.push(`${c.papers.length} .paper elements, expected 2`);
+            c.papers.forEach((pp, i) => {
+                if (!near(pp.zoom, z, 0.1)) {
+                    f.push(`paper[${i}] zoom ${pp.zoom.toFixed(3)} is not the glass's ${z.toFixed(3)}`);
+                }
+                if (!rel(pp.scale, 1 / z, 1e-3)) {
+                    f.push(`paper[${i}] counter-scale ${pp.scale.toFixed(5)} is not 1/z ${(1 / z).toFixed(5)}`);
+                }
+                const w = parseFloat(pp.inlineWidth);
+                if (!pp.inlineWidth || !Number.isFinite(w) || !near(w, c.pileW, 1)) {
+                    f.push(`paper[${i}] inline width "${pp.inlineWidth}" is not the pile's ${c.pileW === null ? '?' : c.pileW.toFixed(2)}px`);
+                }
+            });
+        } else {
+            /* Put down clean: the stylesheet's own page, with nothing of the
+               glass left inline on it. */
+            if (c.zoomerTransform !== 'none' || c.zoomerInline !== '') {
+                f.push(`zoomer still transformed at rest ("${c.zoomerInline || c.zoomerTransform}")`);
+            }
+            c.papers.forEach((pp, i) => {
+                if (pp.zoom !== 1) f.push(`paper[${i}] zoom ${pp.zoom} at rest`);
+                if (pp.transform !== 'none') f.push(`paper[${i}] transform "${pp.transform}" at rest`);
+                if (pp.inlineWidth) f.push(`paper[${i}] inline width "${pp.inlineWidth}" left behind at rest`);
+            });
+        }
+        return f;
+    }
+
     /* ── 3. crispness, which is the point ─────────────────────────────── */
 
     /* One zoom level, measured properly: recentre so the crop has ink in it,
@@ -811,6 +1064,12 @@ async function main() {
         }
         note(`  ${detail}`);
         note(`  first frame under ${bar}px: ${firstPass === null ? 'never within 6s' : firstPass + 'ms after the last wheel'}`);
+
+        const c = await evaluate('window.__bench.contract()');
+        const faults = contractFaults(c, climb.z);
+        check(`mechanism at ${label}: glass x${c.zoomerScale.toFixed(2)}, paper laid out at z and scaled back by 1/z`,
+            faults.length === 0, `${faults.join('; ')} | ${placement(c)}`);
+        note(`  settled placement: ${placement(c)}`);
         return climb.z;
     }
 
@@ -824,7 +1083,237 @@ async function main() {
         skip('crisp at z256', uncalibrated);
     }
 
-    /* ── 3b. the phase regression ─────────────────────────────────────── */
+    /* ── 3b. crisp WHILE it moves, which is the whole point ───────────── */
+
+    /* The settled page has been sharp for several rounds now. What the reader
+       actually complained about is the movement: a zoom carried on the
+       compositor stretches the last raster until the hand stops, so the words
+       swim and then snap. Layout zoom is written every frame precisely so that
+       never happens — and the only way to hold the page to that is to
+       photograph it in the middle of a gesture rather than after one.
+       The burst is left running on the page; the bench comes back mid-flight,
+       takes the picture, and only then waits for the gesture to finish. */
+    async function midGesture(label, opts) {
+        await escape();
+        if (opts.preZoom) {
+            await evaluate(`window.__bench.zoomTo(${opts.preZoom})`, 25000);
+            await sleep(SETTLE_MS + 200);
+        }
+        await evaluate(`window.__bench.burst(${JSON.stringify(opts.burst)})`);
+        await sleep(opts.captureAt);
+        const before = await evaluate('window.__bench.burstState()');
+        const data = await capture();
+        const after = await evaluate('window.__bench.burstState()');
+        await evaluate('window.__bench.awaitBurst()', 60000);
+        await sleep(SETTLE_MS);
+        const m = await measure(data);
+        const path = await save(`midgesture-${label}.png`, data);
+        midSharp[label] = m;
+
+        const w = m.edgeWidthMedian;
+        const moving = before && after && !before.done &&
+            (opts.burst.kind === 'zoom' ? after.z > before.z + 1e-6 : after.ticks > before.ticks);
+        const detail = `z ${before ? before.z.toFixed(1) : '?'} -> ${after ? after.z.toFixed(1) : '?'} ` +
+            `across the shutter (tick ${before ? before.ticks : '?'} of ${opts.burst.ticks}), ` +
+            `median ${w === null ? 'n/a' : w.toFixed(2) + 'px'}, ${m.edgeWidthN} edges, ` +
+            `ink ${(m.inkFrac * 100).toFixed(1)}%, mode "${after ? after.mode.mode : '?'}"`;
+
+        if (!moving) {
+            notOk(`mid-gesture ${label}: stays under ${MID_MAX}px while moving`,
+                `the burst was not still running when the shutter opened, so this proves ` +
+                `nothing about movement — ${detail}; see ${path}`);
+        } else if (w === null || m.edgeWidthN < MIN_EDGES) {
+            notOk(`mid-gesture ${label}: stays under ${MID_MAX}px while moving`,
+                `no measurable edge in the crop — ${detail}; see ${path}`);
+        } else {
+            const ok_ = w <= MID_MAX;
+            check(`mid-gesture ${label}: ${w.toFixed(2)}px while moving (want <= ${MID_MAX})`,
+                ok_,
+                `${detail} — a page that only rasterizes at rest stretches its last raster ` +
+                `through the gesture, which is exactly what this width is measuring. ` +
+                `EXPECTED RED while the mid-gesture mechanism is being rebuilt: this is the ` +
+                `oracle for that feature, not a regression in what already works; see ${path}`);
+        }
+        note(`  ${detail}`);
+        /* A crisp frame mid-gesture is only trustworthy if the scale was on
+           layout at the time. If it was on the transform, this machine's
+           compositor chose to re-rasterize — and the whole reason for the
+           pivot is that the reader's machine chose not to. Say so, so a pass
+           here is never mistaken for a guarantee. */
+        if (after && after.contract) {
+            const faults = contractFaults(after.contract);
+            check(`mechanism mid-${label}: paper carried the layout scale through the gesture`,
+                faults.length === 0,
+                `${faults.join('; ')} | ${placement(after.contract)}`);
+            note(`  placement at the shutter: ${placement(after.contract)}`);
+            if (faults.length === 0) {
+                note(`  the paper was laid out at z when the shutter opened, so this width is a ` +
+                    `guarantee and not a favour: the raster was made at size, whatever the ` +
+                    `compositor would have chosen to do with a stretched one`);
+            }
+        }
+    }
+
+    if (calibrated) {
+        /* Sixty-four ticks at 30ms is a two-second pinch from 1x to the
+           ceiling; the shutter opens a third of the way in, around 12x, where
+           there is plenty of ink. */
+        await midGesture('zoom', {
+            burst: { kind: 'zoom', ticks: 64, spacing: 30 },
+            captureAt: 700,
+        });
+        /* And the same question of a pan, which at 64x moves the paper far
+           faster than the eye can follow a stale raster. */
+        /* Along the line, not across it. At 64x the screen holds about
+           nineteen css pixels of paper, so a vertical pan is in the blank
+           between two lines within a few ticks, while a horizontal one runs
+           the length of a sentence. */
+        await midGesture('pan', {
+            preZoom: 64,
+            burst: { kind: 'pan', ticks: 40, spacing: 30, dx: 25 },
+            captureAt: 400,
+        });
+    } else {
+        skip('mid-gesture zoom', uncalibrated);
+        skip('mid-gesture pan', uncalibrated);
+    }
+
+    /* ── 3c. where the scale sits, reported not judged ────────────────── */
+
+    /* The mechanism is being rebuilt, so this asserts nothing. It samples a
+       climbing gesture frame by frame and writes down where the scale was
+       living at each one, which is the context the crispness numbers above
+       and below are read against. When the mechanism settles, this is the
+       block that grows a contract. */
+    if (calibrated) {
+        try {
+            await escape();
+            await evaluate(`window.__bench.burst({ kind: 'zoom', ticks: 24, raf: true, sample: true })`);
+            await evaluate('window.__bench.awaitBurst()', 30000);
+            const climbC = await evaluate('window.__bench.contract()');
+            note(`placement at the top of a 24-frame climb: ${placement(climbC)}`);
+            await sleep(SETTLE_MS + 300);
+            const settledC = await evaluate('window.__bench.contract()');
+            note(`  after the settle: ${placement(settledC)}` +
+                ` — the settle only snaps the pan now, so nothing about the scale moves`);
+            await escape();
+            await sleep(300);
+            note(`  put down:         ${placement(await evaluate('window.__bench.contract()'))}`);
+        } catch (e) {
+            note(`placement probe failed: ${String(e.message || e)}`);
+        }
+    }
+
+    /* ── 3d. and the settle must not move the picture ─────────────────── */
+
+    /* Nothing changes hands at settle now — the pan is simply nudged onto a
+       whole device pixel — so the last frame of the gesture and the settled
+       frame should be the same picture, off by at most that nudge. */
+    if (!calibrated) {
+        skip('geometry: the settle moves the picture <= 1 device px', uncalibrated);
+    } else {
+        try {
+            await escape();
+            await evaluate('window.__bench.zoomTo(8)', 25000);
+            /* A zero-delta ctrl-wheel re-arms the 150ms settle without moving
+               anything — exp(0) is 1, so the zoom and the pan come out of
+               zoomAt exactly as they went in. That buys a clean window to
+               photograph the unsettled frame in. */
+            await evaluate('window.__bench.wheel({ ctrlKey: true, deltaY: 0 })');
+            const tTick = Date.now();
+            const preData = await capture();
+            const preElapsed = Date.now() - tTick;
+
+            await sleep(SETTLE_MS + 300);
+            const postData = await capture();
+
+            const al = await evaluate(
+                `window.__bench.align("data:image/png;base64,${preData}", "data:image/png;base64,${postData}", 256, 8)`,
+                90000);
+            await save('settle-pre.png', preData);
+            await save('settle-post.png', postData);
+
+            check(`geometry: the settle moves the picture ${al.shift} device px (want <= 1)`,
+                al.shift <= 1,
+                `best alignment dx=${al.dx} dy=${al.dy} over a ${al.crop}px crop ` +
+                `(residual ${al.perPx.toFixed(1)}/px) — only the pan snap should move at settle, ` +
+                `and it can only move half a device pixel`);
+            note(`  pre-shot at +${preElapsed}ms, post-shot after the settle`);
+        } catch (e) {
+            notOk('geometry: the settle moves the picture <= 1 device px', String(e.message || e));
+        }
+    }
+
+    /* ── 3e. what a frame of it costs ─────────────────────────────────── */
+
+    /* Layout scale is not free the way a compositor transform is: every frame
+       of the gesture is a real relayout and repaint. That is the trade the
+       pivot made deliberately, and this is the number that says whether the
+       trade still fits inside a frame. */
+    if (!calibrated) {
+        skip(`cost: a gesture frame stays under ${FRAME_MS_MAX}ms of main-thread work`, uncalibrated);
+    } else {
+        try {
+            await escape();
+            await cdp.send('Performance.enable');
+            const readTask = async () => {
+                const { metrics } = await cdp.send('Performance.getMetrics');
+                const m = metrics.find((x) => x.name === 'TaskDuration');
+                return m ? m.value : null;
+            };
+            /* Two bursts, because the two halves of a gesture cost wildly
+               different things and one number would hide it: changing the zoom
+               value relays out the sheets every frame, while panning at a
+               fixed zoom only moves a translate. Only the first is held to the
+               bar; the second is measured so a failure says which it was. */
+            const burstCost = async (expr) => {
+                const a = await readTask();
+                const wall = Date.now();
+                await evaluate(expr);
+                const run = await evaluate('window.__bench.awaitBurst()', 60000);
+                const bT = await readTask();
+                return (a === null || bT === null) ? null : {
+                    perFrame: ((bT - a) * 1000) / run.ticks,
+                    task: (bT - a) * 1000,
+                    ticks: run.ticks,
+                    wall: Date.now() - wall,
+                };
+            };
+
+            /* Sixty ticks up and sixty back, one per frame, so every frame does
+               real work rather than clamping at the ceiling. */
+            const scaling = await burstCost(
+                `window.__bench.burst({ kind: 'zoom', ticks: 120, raf: true, reverseAt: 60, quiet: true })`);
+            await escape();
+            await evaluate('window.__bench.zoomTo(64)', 25000);
+            await sleep(SETTLE_MS);
+            const panning = await burstCost(
+                `window.__bench.burst({ kind: 'pan', ticks: 120, raf: true, quiet: true, dx: 2 })`);
+            await escape();
+
+            if (!scaling) {
+                notOk(`cost: a gesture frame stays under ${FRAME_MS_MAX}ms of main-thread work`,
+                    'Performance.getMetrics did not report TaskDuration');
+            } else {
+                frameCost = scaling.perFrame;
+                panCost = panning ? panning.perFrame : null;
+                check(`cost: ${frameCost.toFixed(2)}ms of main-thread work per pinch frame (want <= ${FRAME_MS_MAX})`,
+                    frameCost <= FRAME_MS_MAX,
+                    `${scaling.ticks} frames of changing zoom cost ${scaling.task.toFixed(0)}ms of main-thread ` +
+                    `time over ${scaling.wall}ms wall (${(scaling.task / scaling.wall * 100).toFixed(0)}% of the ` +
+                    `thread), while ${panning ? panning.ticks + ' frames of panning at 64x cost only ' + panning.perFrame.toFixed(2) + 'ms each' : 'the pan comparison did not run'}. ` +
+                    `So it is not layout zoom that is expensive — it is changing the zoom value, which ` +
+                    `relays out both sheets every frame. Past ${FRAME_MS_MAX}ms a frame a pinch cannot keep up ` +
+                    `on slower hardware than this`);
+                note(`  pinch ${frameCost.toFixed(2)}ms/frame vs pan at 64x ${panCost === null ? '—' : panCost.toFixed(2) + 'ms/frame'}` +
+                    ` (bench floor is about 0.4ms/frame)`);
+            }
+        } catch (e) {
+            notOk(`cost: a gesture frame stays under ${FRAME_MS_MAX}ms of main-thread work`, String(e.message || e));
+        }
+    }
+
+    /* ── 3d. the phase regression ─────────────────────────────────────── */
 
     /* The last thing between this page and the browser's own zoom was never
        resolution — it was where the layer origin fell between device pixels.
@@ -878,58 +1367,103 @@ async function main() {
         }
     }
 
-    /* ── 3c. the negative control ─────────────────────────────────────── */
+    /* ── 3e. pinned compositor, and what the swap does about it ───────── */
 
-    /* Every verdict above is one-sided: a metric that had quietly stopped
-       working — a decode returning blank, a crop landing off the image, an
-       edit that broke the transition walk — would sail through as three
-       passes. So stage the exact regression the pivot exists to prevent, put
-       the pins back, and require the number to move. If the smear is invisible
-       from here, the bench is blind and nothing it said above means anything;
-       that must fail loudly rather than pass in silence. */
+    /* Both tests below stage something hostile on a fresh page and then look at
+       8x. Fresh, because will-change pins a layer at whatever raster it is
+       holding, and after the climb to 256x that raster is a fine one — pinning
+       that and dropping back to 8x would show a texture sharper than the view
+       needs, which is the opposite of what either test asks about. A reload is
+       the only way to be sure the layer starts at 1x, and it costs a second. */
+    async function stagedAtZ8(opts) {
+        await cdp.send('Page.navigate', { url: `${base}/resume/` });
+        await until(async () => (await evaluate('document.readyState')) === 'complete', 20000);
+        await until(() => evaluate(`document.documentElement.classList.contains('ready')`), 15000);
+        await evaluate(HELPERS);
+        await sleep(700);
+        if (opts.repin) await evaluate('window.__bench.repin(true)');
+        if (opts.blur) await evaluate('window.__bench.blurGrab(true)');
+        await evaluate('window.__bench.zoomTo(8)', 25000);
+        await sleep(SETTLE_MS + 600);
+        const pins = await evaluate('window.__bench.pins()');
+        const md = await evaluate('window.__bench.mode()');
+        const data = await capture();
+        const m = await measure(data);
+        const path = await save(opts.shot, data);
+        return { m, pins, md, path };
+    }
+    const unstage = async () => {
+        try { await evaluate('window.__bench.repin(false)'); } catch { }
+        try { await evaluate('window.__bench.blurGrab(false)'); } catch { }
+        try { await escape(); } catch { }
+    };
+
+    /* The user's own report was that the compositor simply declined to
+       re-rasterize on their machine, and pinning will-change is that failure
+       made deliberate. The whole point of moving the settled zoom onto layout
+       scale is that it does not ask the compositor's permission — so with the
+       pins jammed back on, the page must still come up sharp. This is the
+       direct regression test for the bug that caused the pivot. */
     if (!calibrated) {
-        skip(`negative control: a re-pinned layer measures at least ${NEG_FLOOR}px`, uncalibrated);
+        skip(`resilience: a pinned compositor still settles under ${CRISP_MAX.z8}px`, uncalibrated);
     } else {
-        /* On a fresh page, because will-change pins a layer at whatever raster
-           it is holding — and after the climb to 256x that raster is a fine
-           one. Pinning it then and dropping back to 8x would show a texture
-           sharper than the view needs, which is the opposite of the smear this
-           test is looking for. A reload is the only way to be sure the layer
-           starts at 1x, and it costs a second. */
-        let m = null, pins = null, err = null;
+        let r = null, err = null;
         try {
-            await cdp.send('Page.navigate', { url: `${base}/resume/` });
-            await until(async () => (await evaluate('document.readyState')) === 'complete', 20000);
-            await until(() => evaluate(`document.documentElement.classList.contains('ready')`), 15000);
-            await evaluate(HELPERS);
-            await sleep(700);
-            await evaluate('window.__bench.repin(true)');
-            await evaluate('window.__bench.zoomTo(8)', 25000);
-            /* A pinned layer never sharpens, so there is nothing to wait for
-               beyond the frame that draws it. */
-            await sleep(900);
-            pins = await evaluate('window.__bench.pins()');
-            const data = await capture();
-            m = await measure(data);
-            await save('negative-control-z8.png', data);
+            r = await stagedAtZ8({ repin: true, shot: 'resilience-pinned-z8.png' });
         } catch (e) {
             err = String(e.message || e);
         } finally {
-            /* The staged regression leaves with the test, pass or fail. */
-            await evaluate('window.__bench.repin(false)');
-            await escape();
+            await unstage();
         }
         if (err) {
-            notOk(`negative control: a re-pinned layer measures at least ${NEG_FLOOR}px`, err);
+            notOk(`resilience: a pinned compositor still settles under ${CRISP_MAX.z8}px`, err);
         } else {
-            const w = m.edgeWidthMedian;
-            check(`negative control: re-pinned at 8x measures ${w === null ? 'n/a' : w.toFixed(2) + 'px'} (want >= ${NEG_FLOOR})`,
-                w !== null && m.edgeWidthN >= MIN_EDGES && w >= NEG_FLOOR,
-                `a re-pinned layer should smear to about z x 1.4px and the metric should see it. ` +
-                `Got median ${w === null ? 'n/a' : w.toFixed(2) + 'px'} over ${m.edgeWidthN} edges, ` +
-                `ink ${(m.inkFrac * 100).toFixed(1)}%, maxGrad ${m.maxGrad.toFixed(0)}, ` +
-                `pins ${JSON.stringify(pins)}. If this reads crisp, the metric is blind ` +
-                `and the three crisp results above are meaningless.`);
+            const w = r.m.edgeWidthMedian;
+            check(`resilience: pinned compositor, settled anyway at ${w === null ? 'n/a' : w.toFixed(2) + 'px'} (want <= ${CRISP_MAX.z8})`,
+                w !== null && r.m.edgeWidthN >= MIN_EDGES && w <= CRISP_MAX.z8,
+                `with will-change pinned the compositor cannot re-raster, so layout zoom is the ` +
+                `only thing that can make this sharp — and it did not. ` +
+                `Median ${w === null ? 'n/a' : w.toFixed(2) + 'px'} over ${r.m.edgeWidthN} edges, ` +
+                `mode "${r.md.mode}" (grab zoom ${r.md.grabZoom.toFixed(2)}, scale ${r.md.scale.toFixed(2)}), ` +
+                `pins ${JSON.stringify(r.pins)}. See ${r.path}`);
+            note(`  pinned at ${JSON.stringify(r.pins.zoomer)}, settled into mode "${r.md.mode}" at ${w === null ? 'n/a' : w.toFixed(2) + 'px'}`);
+        }
+    }
+
+    /* And the control that keeps the metric honest. Every crispness verdict is
+       one-sided: a metric that had quietly stopped working — a decode returning
+       blank, a crop landing off the image, an edit that broke the transition
+       walk — would sail through as passes. Staging a smear out of the page's
+       own machinery no longer works, because there is no longer a way to make
+       this page render badly; that is the good news the resilience test above
+       reports, and it costs the bench its old control. So the control stops
+       depending on the mechanism entirely and puts two pixels of blur on the
+       glass. If the bench cannot see that, nothing it said above means
+       anything. */
+    if (!calibrated) {
+        skip(`metric blindness control: two staged pixels of blur read at least ${BLUR_FLOOR}px`, uncalibrated);
+    } else {
+        let r = null, err = null;
+        try {
+            r = await stagedAtZ8({ blur: true, shot: 'blindness-control-z8.png' });
+        } catch (e) {
+            err = String(e.message || e);
+        } finally {
+            await unstage();
+        }
+        if (err) {
+            notOk(`metric blindness control: two staged pixels of blur read at least ${BLUR_FLOOR}px`, err);
+        } else {
+            const w = r.m.edgeWidthMedian;
+            check(`metric blindness control: staged blur reads ${w === null ? 'n/a' : w.toFixed(2) + 'px'} (want >= ${BLUR_FLOOR})`,
+                w !== null && r.m.edgeWidthN >= MIN_EDGES && w >= BLUR_FLOOR,
+                `two css pixels of blur spread a step over roughly ten device pixels at dpr 2, ` +
+                `and the metric did not see it. Got median ` +
+                `${w === null ? 'n/a' : w.toFixed(2) + 'px'} over ${r.m.edgeWidthN} edges, ` +
+                `ink ${(r.m.inkFrac * 100).toFixed(1)}%, maxGrad ${r.m.maxGrad.toFixed(0)}. ` +
+                `If this reads crisp the bench is blind, and every crisp verdict above is ` +
+                `meaningless. See ${r.path}`);
+            note(`  staged blur read ${w === null ? 'n/a' : w.toFixed(2) + 'px'} over ${r.m.edgeWidthN} edges`);
         }
     }
 
@@ -957,8 +1491,13 @@ async function main() {
     const after = await evaluate(
         `JSON.stringify({ z: window.__bench.z(), zoomed: window.__bench.zoomed() })`);
     const st = JSON.parse(after);
-    check('escape: back to z=1 with the zoomed class gone',
-        Math.abs(st.z - 1) < 1e-6 && st.zoomed === false, `got ${after}`);
+    /* And put down clean: every inline trace of the glass gone from the paper,
+       so the deal gets back exactly the page the stylesheet describes. */
+    const restC = await evaluate('window.__bench.contract()');
+    const restFaults = contractFaults(restC);
+    check('escape: back to z=1, zoomed class gone, paper left clean',
+        Math.abs(st.z - 1) < 1e-6 && st.zoomed === false && restFaults.length === 0,
+        `${restFaults.join('; ')} | ${after} | ${placement(restC)}`);
 
     /* ── 6. the deal, which the pivot must not have touched ───────────── */
 
@@ -1032,11 +1571,16 @@ try {
 say(`1..${n}`);
 note('');
 note('── summary ─────────────────────────────────────────');
-note(`At dpr 2 on this page, measured with the snap disabled and phase swept:`);
-note(`  z=256  floor 1.61px on a whole device pixel, 2.15px on a half — phase is`);
-note(`         the whole story here, so the bar is ${CRISP_MAX.z256}px and the phase test lives here.`);
-note(`  z=8/64 2.20–2.37px whatever the phase: dense body type, not blur. Bar ${CRISP_MAX.z8}px.`);
-note(`  pinned layer ~z x 1.4px; past ${CATASTROPHIC}px it is not re-rasterizing at all.`);
+note(`At dpr 2 on this page. One scale, carried three ways and checked at every`);
+note(`zoom both moving and at rest: the glass magnifies by z, each sheet of paper`);
+note(`is laid out at z through CSS zoom, and that paper is scaled back by 1/z so`);
+note(`what the glass magnifies was rasterized at size. Because the raster is made`);
+note(`at size by construction, a crisp reading here is a guarantee rather than a`);
+note(`compositor's favour — which is what the reader's machine withheld.`);
+note(`Settled bar ${CRISP_MAX.z8}px, moving bar ${MID_MAX}px (slack for a shutter that can open mid-paint).`);
+note(`Phase matters where it is legible: at 256x half a device pixel of offset`);
+note(`cost 2.15px against a 1.61px floor, held to ${PHASE_MAX}px. Past ${CATASTROPHIC}px nothing is`);
+note(`re-rasterizing at all.`);
 note('');
 for (const label of ['z8', 'z64', 'z256']) {
     const m = sharp[label];
@@ -1045,6 +1589,13 @@ for (const label of ['z8', 'z64', 'z256']) {
     note(`        sharp after ${l === null || l === undefined ? '—' : l + 'ms'} from the last wheel`);
 }
 note(`phase : ${sharp.phase ? (sharp.phase.edgeWidthMedian === null ? 'no edge found' : sharp.phase.edgeWidthMedian.toFixed(2) + 'px after a half-device-pixel pan') : '—'}`);
+note('');
+for (const label of ['zoom', 'pan']) {
+    const m = midSharp[label];
+    note(`mid ${label.padEnd(5)}: ${m ? (m.edgeWidthMedian === null ? 'no edge found' : m.edgeWidthMedian.toFixed(2) + 'px WHILE moving, ' + m.edgeWidthN + ' edges') : '—'}`);
+}
+note(`cost  : ${frameCost === null ? '—' : frameCost.toFixed(2) + ' ms/frame while the zoom changes (pinch)'}`);
+note(`        ${panCost === null ? '—' : panCost.toFixed(2) + ' ms/frame panning at 64x — it is changing the scale that costs, not holding it'}`);
 note('');
 note(`shots  : ${shots.length ? '' : '—'}`);
 for (const p of shots) note(`         ${p}`);
