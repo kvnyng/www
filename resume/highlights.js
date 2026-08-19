@@ -508,7 +508,25 @@
         addEventListener('gesturechange', () => { if (menuOpen()) hideMenu(); });
         addEventListener('resize', () => { if (menuOpen()) hideMenu(); });
         document.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Escape') hideMenu();
+            if (ev.key === 'Escape') {
+                /* The top rung of the escape ladder, the rest of which is in
+                 * index.html. The menu and the sweep that raised it are one
+                 * thing to a reader — a passage they are holding — so the
+                 * press takes both or neither, and says which: a press
+                 * marked spent is one the glass and the deal below leave
+                 * alone, and that is the whole of what keeps a single
+                 * Escape from putting a passage down and the magnification
+                 * with it. Nothing held, nothing swept, and the press falls
+                 * straight through to them untouched. */
+                const sel = getSelection();
+                const swept = !!(sel && sel.rangeCount && !sel.isCollapsed);
+                if (menuOpen() || swept) {
+                    hideMenu();
+                    if (swept) sel.removeAllRanges();
+                    ev.preventDefault();
+                }
+                return;
+            }
             if (!ev.metaKey && !ev.ctrlKey && !ev.altKey &&
                 ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(ev.key)) {
                 if (menuOpen()) hideMenu();

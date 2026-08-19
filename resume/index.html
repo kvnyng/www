@@ -508,18 +508,49 @@
                 kick();
                 if (settleOnIdle) armIdle();
             }
-            /* Escape puts the glass down; the arrows and page keys deal. And
-               under the glass they do not deal at all — the same diversion
-               the wheel and a finger already make, for a better reason than
-               tidiness: the flight is a per-frame rotation of paper drawn at
-               1x, and the moment the glass is up the layer pins are off, so a
-               deal at 256x would be asking the compositor to re-raster two
-               enormous sheets on every frame of it. Escape first, then the
-               deal — which is also what makes "mid-deal the pins are right"
-               true, since mid-deal can no longer happen zoomed. */
+            /* ── The escape ladder ────────────────────────────────────────
+               One key, and it puts the room down a rung at a time, nearest
+               thing first: what the reader is holding, then how close they
+               are standing to the paper, then where the paper itself was
+               left. A press only ever spends one rung, so backing out is
+               the way in run backwards, and nothing is undone that was not
+               asked for twice.
+
+               The top rung is the highlighter's (highlights.js): it listens
+               on the document, which the bubble reaches before this window
+               does, and marks the press spent when it takes a menu or a
+               sweep down. The same rung stands here behind it, for the
+               reader whose browser has no Custom Highlight API and so never
+               got the highlighter at all — the sweep is still theirs to put
+               down.
+
+               Then the glass, which comes down in one move: there is no
+               half-way out of a magnification, and the pan goes with it.
+
+               Then the deal, the only rung with anything to watch — page
+               one flies back in on the tween the arrows already use, since
+               paint() is a pure function of how far the deal has gone and
+               running that number home runs the flight backwards.
+
+               The arrows and page keys do not deal under the glass at all,
+               the same diversion the wheel and a finger already make, for a
+               better reason than tidiness: the flight is a per-frame
+               rotation of paper drawn at 1x, and the moment the glass is up
+               the layer pins are off, so a deal at 256x would be asking the
+               compositor to re-raster two enormous sheets on every frame of
+               it. The ladder keeps that true of Escape as well — its
+               dealing rung is only ever reached with the glass already
+               down, so mid-deal still cannot happen zoomed. */
             addEventListener('keydown', (e) => {
                 if (e.metaKey || e.ctrlKey || e.altKey) return;
-                if (e.key === 'Escape') { z = 1; panX = panY = 0; applyZoom(); return; }
+                if (e.defaultPrevented) return;
+                if (e.key === 'Escape') {
+                    const sel = getSelection();
+                    if (sel && sel.rangeCount && !sel.isCollapsed) { sel.removeAllRanges(); return; }
+                    if (z > 1) { z = 1; panX = panY = 0; applyZoom(); return; }
+                    goTo(0);
+                    return;
+                }
                 if (z > 1) return;
                 if (e.key === 'ArrowRight' || e.key === 'PageDown') goTo(1);
                 if (e.key === 'ArrowLeft' || e.key === 'PageUp') goTo(0);
@@ -870,6 +901,51 @@
             /* The right button pans, so the menu it usually carries is off
                within the scene. */
             scene.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            /* ── Sideways ─────────────────────────────────────────────────
+               A phone turned on its side has almost no height to fit a page
+               into, and the fit-the-pile rule above would honor it anyway:
+               a couple of hundred pixels of paper, whole and unreadable.
+               But the page already owns a better answer than a smaller
+               fit — the glass. So the turn itself raises it: the sheet is
+               zoomed until it spans the width and opened at the top,
+               because a sideways phone is a reading posture and reading
+               starts at the name. Everything after that is the glass as it
+               already works — a finger pans down the page, a pinch
+               adjusts, and turning back upright puts it down again.
+
+               Phones only, which is what the height clause is for: a
+               tablet on its side still has room to show the page whole,
+               and keeps it. */
+            const sideways = matchMedia(
+                '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)');
+            function fillWidth() {
+                /* Fresh numbers first: the rotation that brings us here
+                   has just reshaped every box this math stands on. */
+                measure();
+                /* A thin breath either side — the width is the point. */
+                const m = 12;
+                const nz = (W - 2 * m) / pileW;
+                if (nz <= 1) return;
+                z = nz;
+                /* Centered across, and the top edge of the sheet laid a
+                   breath under the top of the screen. */
+                panX = W / 2 - (pileLeft + pileW / 2);
+                panY = m - pileTop + (pileH / 2) * (z - 1);
+                applyZoom();
+            }
+            sideways.addEventListener('change', () => {
+                if (sideways.matches) {
+                    fillWidth();
+                } else {
+                    z = 1;
+                    panX = panY = 0;
+                    measure();
+                    applyZoom();
+                }
+            });
+            /* Arriving already sideways is the same posture as turning. */
+            if (sideways.matches) fillWidth();
 
             /* ── The lens ─────────────────────────────────────────────────
                There is no lens in this file, and that is the whole finding.
