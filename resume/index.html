@@ -85,14 +85,12 @@
                         <div class="sheet s2">
                             <div class="aura"></div>
                             <img src="page-2.svg" alt="Resume, page two" width="612" height="792">
-                            <canvas class="lens" hidden></canvas>
                             <div class="textlayer"></div>
                             <div class="dim"></div>
                         </div>
                         <div class="sheet s1">
                             <div class="aura"></div>
                             <img src="page-1.svg" alt="Resume, page one" width="612" height="792">
-                            <canvas class="lens" hidden></canvas>
                             <div class="textlayer"></div>
                         </div>
                     </div>
@@ -152,10 +150,6 @@
             const dim = s2.querySelector('.dim');
             const grab = document.querySelector('.grab');
             const arm = document.querySelector('.tools-arm');
-            const lenses = [
-                document.querySelector('.s1 .lens'),
-                document.querySelector('.s2 .lens'),
-            ];
             const one = document.querySelector('.counter .one');
             const live = document.querySelector('.counter .live');
             const status = document.querySelector('[role="status"]');
@@ -376,19 +370,30 @@
             }
             const kick = () => { if (raf === null) raf = requestAnimationFrame(step); };
 
-            addEventListener('resize', () => { measure(); kick(); scheduleSharpen(); buildTextLayers(); });
+            addEventListener('resize', () => { measure(); kick(); buildTextLayers(); });
 
             /* The pile is at rest on a page: tell the world which. */
-            function rest() {
-                scheduleSharpen();
+            function announce() {
                 const onTwo = target >= 0.5;
                 history.replaceState(null, '', onTwo ? '#two' : location.pathname);
                 status.textContent = onTwo ? 'Showing page two of two' : 'Showing page one of two';
             }
 
+            /* A gesture has come to a stop. That is the bookkeeping above,
+               and it is also a hand arriving — which is why the PDF gets
+               asked for here. The forgiveness in ensurePdf's catch is only
+               permission to try again; something has to actually reach a
+               second time, and a deal settling and the glass coming up are
+               where reaching happens. Both calls cost nothing once the
+               document is in hand. */
+            function rest() {
+                announce();
+                ensurePdf();
+            }
+
             /* No snapping: the pile rests wherever the hand leaves it. The
-               idle timer only brings the bookkeeping — hash, label, lens —
-               up to date once the motion has gone quiet. */
+               idle timer only brings the bookkeeping — hash, label — up to
+               date once the motion has gone quiet. */
             let idleTimer = null;
             function armIdle() {
                 clearTimeout(idleTimer);
@@ -419,11 +424,21 @@
                 kick();
                 if (settleOnIdle) armIdle();
             }
+            /* Escape puts the glass down; the arrows and page keys deal. And
+               under the glass they do not deal at all — the same diversion
+               the wheel and a finger already make, for a better reason than
+               tidiness: the flight is a per-frame rotation of paper drawn at
+               1x, and the moment the glass is up the layer pins are off, so a
+               deal at 256x would be asking the compositor to re-raster two
+               enormous sheets on every frame of it. Escape first, then the
+               deal — which is also what makes "mid-deal the pins are right"
+               true, since mid-deal can no longer happen zoomed. */
             addEventListener('keydown', (e) => {
                 if (e.metaKey || e.ctrlKey || e.altKey) return;
+                if (e.key === 'Escape') { z = 1; panX = panY = 0; applyZoom(); return; }
+                if (z > 1) return;
                 if (e.key === 'ArrowRight' || e.key === 'PageDown') goTo(1);
                 if (e.key === 'ArrowLeft' || e.key === 'PageUp') goTo(0);
-                if (e.key === 'Escape') { z = 1; panX = panY = 0; applyZoom(); }
             });
 
             /* ── The magnifying glass ─────────────────────────────────────
@@ -433,6 +448,12 @@
                and the deal are untouched underneath it. */
             let z = 1, panX = 0, panY = 0;
             let panning = false, panned = false, lx = 0, ly = 0;
+            let zoomIdle = null;
+
+            const writeZoom = () => {
+                zoomer.style.transform = z === 1 ? '' :
+                    `translate3d(${panX}px, ${panY}px, 0) scale(${z})`;
+            };
 
             function applyZoom() {
                 /* The pan is leashed to the zoom: enough travel to reach any
@@ -441,22 +462,70 @@
                 const my = (z - 1) * pile.offsetHeight * 0.75;
                 panX = clamp(panX, -mx, mx);
                 panY = clamp(panY, -my, my);
-                zoomer.style.transform = z === 1 ? '' :
-                    `translate3d(${panX}px, ${panY}px, 0) scale(${z})`;
+                writeZoom();
                 /* The caption is furniture of the pile, not the paper: under
                    the glass it steps out of the way, and it walks back in
-                   when the glass is put down. */
+                   when the glass is put down. But this class carries more
+                   than furniture now — it is also what releases the layer
+                   pins, and so what lets the sheets be drawn again from their
+                   vectors. See the lens note below. */
                 scene.classList.toggle('zoomed', z !== 1);
-                scheduleSharpen();
+                ensurePdf();
+                /* Every write restarts the wait for the hand to stop; putting
+                   the glass down cancels it outright. */
+                clearTimeout(zoomIdle);
+                if (z !== 1) zoomIdle = setTimeout(settleZoom, 150);
+            }
+
+            /* ── The half pixel ───────────────────────────────────────────
+               The transform rasters at native scale: hold the view still and
+               the crop is the same bytes the browser's own page zoom makes of
+               the same sheet, to the byte. What is left is where the layer
+               lands. Off the device grid, the compositor no longer has curves
+               to draw — it has a finished bitmap it must set down between
+               pixels, two taps wide, so every edge in the type takes on half a
+               pixel of its neighbour's ink. That is the whole of the residual
+               softness, and it is a matter of phase, not scale: an edge
+               measures 1.47px across at a whole-pixel offset and 2.20px at
+               half of one.
+
+               So when the hand goes quiet the sheet's own corner is rounded
+               onto the grid. At most half a device pixel, once, a sixth of a
+               second after the last write — too small and too late to read as
+               motion, and the picture comes up sharp. It hangs off applyZoom,
+               the one door every zoom and pan passes through, so Safari's
+               gesture events are settled by the same string without being
+               wired to it. And it writes the transform itself instead of
+               going back through applyZoom, so a settle can never arm a
+               settle: the nudge is idempotent, but the loop is what would
+               have cost, and it is simply not built. The leash is left alone
+               — half a device pixel cannot walk the sheet off its tether. */
+            function settleZoom() {
+                if (z === 1) return;
+                const r = pile.getBoundingClientRect();
+                const dpr = devicePixelRatio || 1;
+                /* Where the sheet's top-left corner is on screen: the pile is
+                   untransformed — the zoom lives on its child — so the corner
+                   has to be carried out through the scale by hand. */
+                const sx = r.left + r.width / 2 + panX - (r.width / 2) * z;
+                const sy = r.top + r.height / 2 + panY - (r.height / 2) * z;
+                panX += Math.round(sx * dpr) / dpr - sx;
+                panY += Math.round(sy * dpr) / dpr - sy;
+                writeZoom();
             }
 
             function zoomAt(cx, cy, nz) {
                 /* The ceiling is generosity, not a limit of the renderer —
-                   the lens redraws the visible crop at screen resolution
-                   whatever the zoom, at a cost bounded by the screen. At 64x
-                   a line of body type spans several desks; past that is not
-                   reading, and eventually not float32 either. */
-                nz = clamp(nz, 1, 64);
+                   the compositor draws the tracings from their curves at
+                   whatever scale it is handed, and the type does not begin to
+                   soften until around sixteen thousand times — some sixty
+                   times further in than this stops. At 256x a single letter
+                   of body type overruns the window: that is no longer
+                   reading, it is looking at the shape the ink dried in.
+                   There is a ceiling at all only because the arithmetic asks
+                   for one — float32 eventually stops being able to say where
+                   a corner of the page is. */
+                nz = clamp(nz, 1, 256);
                 /* Keep the point under the cursor under the cursor. */
                 const r = pile.getBoundingClientRect();
                 const sx = cx - (r.left + r.width / 2);
@@ -472,9 +541,12 @@
                     e.preventDefault();
                     /* Exponential, clamped per event: a pinch's fine deltas
                        glide and a wheel's coarse notches step, both at a sane
-                       rate. */
+                       rate. The clamp is the ceiling on how hard any one
+                       event may push — at 8 wheel pixels a shoved pinch
+                       climbs about an eighth of a doubling per event, which
+                       is a hand closing on the page rather than a jump. */
                     zoomAt(e.clientX, e.clientY,
-                        z * Math.exp(clamp(-e.deltaY, -24, 24) * 0.011));
+                        z * Math.exp(clamp(-e.deltaY, -8, 8) * 0.011));
                     return;
                 }
                 /* Zoomed in, plain scroll moves around the sheet instead of
@@ -552,51 +624,36 @@
             scene.addEventListener('contextmenu', (e) => e.preventDefault());
 
             /* ── The lens ─────────────────────────────────────────────────
-               The sheets' base images are textures, and a texture magnified
-               is just bigger pixels — no engine walks back to the vectors on
-               zoom. So past 1x, the actual PDF is fetched (once, lazily,
-               pdf.js and worker vendored beside this file) and the visible
-               crop of the page is re-rendered at exactly screen resolution.
-               The canvas lives in sheet coordinates, so the zoomer lands it
-               1:1 on the glass. Crop size is bounded by the screen, so the
-               cost of perfect sharpness never grows with zoom.
+               There is no lens in this file, and that is the whole finding.
+               The sheets are not photographs of paper: they are pdftocairo's
+               tracings, every glyph a path, so the browser has held the
+               vectors all along and will happily draw them again at whatever
+               scale the zoomer's transform asks for.
 
-               The render is not debounced to the end of the gesture — it
-               chases it, the way any serious viewer's tiles do: one render in
-               flight at a time, and the moment it lands, if the view has
-               moved on, the next begins. Each pass draws offstage and is
-               swapped in whole, so the glass never shows a half-painted
-               frame; between passes the stale lens keeps perfect geometry at
-               yesterday's resolution, which the base image backstops. */
+               What stood between the compositor and those curves was this
+               page's own doing. will-change: transform sat on the zoomer, on
+               the grab and on each sheet — three hints, each of which
+               promotes a layer and freezes its raster at the size it was
+               first drawn. A frozen layer is never redrawn, only stretched,
+               and the smear that came of it grew exactly in step with the
+               zoom. That smear is what a whole tiled PDF renderer was once
+               built here to answer, at some hundreds of lines, when the fix
+               was to stop asking for it: under the glass the three hints are
+               released and the picture comes back sharp a frame or two after
+               the gesture settles. The release lives in the stylesheet, on
+               .scene.zoomed — one declaration, and it is the entire lens.
+
+               The pins go back on the moment the glass is put down, because
+               at rest and mid-deal they are right: the flight is translation
+               and rotation of paper drawn at 1x, which is precisely the case
+               a promoted layer exists for.
+
+               pdf.js still comes down, but no longer for pixels. It is here
+               for the ink you can touch — the text layer and the document's
+               own links, immediately below. */
             let pdfLib = null;
             let pdfPages = [null, null];
             let pdfWanted = false;
-            let viewDirty = false;
-            let rendering = false;
-            const scratch = document.createElement('canvas');
-            const scratchCtx = scratch.getContext('2d');
-
-            function scheduleSharpen() {
-                viewDirty = true;
-                if (rendering) return;
-                rendering = true;
-                (async () => {
-                    while (viewDirty) {
-                        viewDirty = false;
-                        try { await sharpen(); } catch (err) { /* keep pumping */ }
-                    }
-                    rendering = false;
-                })();
-            }
-
-            /* Dragging the window onto a denser screen redefines what
-               "screen resolution" means without firing a resize: watch the
-               device pixel ratio itself, and re-render the lens when it
-               moves. */
-            (function watchDpr() {
-                matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener(
-                    'change', () => { scheduleSharpen(); watchDpr(); }, { once: true });
-            })();
 
             async function ensurePdf() {
                 if (pdfWanted) return;
@@ -607,10 +664,10 @@
                     const doc = await lib.getDocument('/kevin_yang_resume.pdf').promise;
                     pdfLib = lib;
                     pdfPages = [await doc.getPage(1), await doc.getPage(2)];
-                    scheduleSharpen();
                     buildTextLayers();
                 } catch (err) {
-                    /* No lens, but the base images still stand — and a flaky
+                    /* No words to select and no links to click, but the pages
+                       themselves are pictures and still stand — and a flaky
                        fetch is forgiven after a beat rather than for good. */
                     setTimeout(() => { pdfWanted = false; }, 4000);
                 }
@@ -659,59 +716,16 @@
                 }
             }
 
-            async function sharpen() {
-                if (z === 1) {
-                    lenses.forEach((l) => { l.hidden = true; });
-                    return;
-                }
-                ensurePdf();
-                /* Only a settled, unrotated page is worth the glass. */
-                if (current > 0.02 && current < 0.98) return;
-                const idx = current < 0.5 ? 0 : 1;
-                const pg = pdfPages[idx];
-                if (!pg) return;
-                lenses[1 - idx].hidden = true;
-                const lens = lenses[idx];
-                const dpr = devicePixelRatio || 1;
-                const r = pile.getBoundingClientRect();
-                const cx = r.left + r.width / 2;
-                const cy = r.top + r.height / 2;
-                /* Screen corners, carried back into sheet coordinates. */
-                const backX = (sx) => (sx - cx - panX) / z + r.width / 2;
-                const backY = (sy) => (sy - cy - panY) / z + r.height / 2;
-                const pad = 48 / z;
-                const x0 = clamp(backX(0) - pad, 0, r.width);
-                const x1 = clamp(backX(innerWidth) + pad, 0, r.width);
-                const y0 = clamp(backY(0) - pad, 0, r.height);
-                const y1 = clamp(backY(innerHeight) + pad, 0, r.height);
-                if (x1 - x0 <= 0 || y1 - y0 <= 0) return;
-                const k = z * dpr;
-                scratch.width = Math.round((x1 - x0) * k);
-                scratch.height = Math.round((y1 - y0) * k);
-                const viewport = pg.getViewport({
-                    scale: (r.width / 612) * k,
-                    offsetX: -x0 * k,
-                    offsetY: -y0 * k,
-                });
-                await pg.render({ canvasContext: scratchCtx, viewport }).promise;
-                /* Landed: size, place and blit in one breath, so the swap is
-                   never seen mid-paint. */
-                lens.width = scratch.width;
-                lens.height = scratch.height;
-                lens.getContext('2d').drawImage(scratch, 0, 0);
-                lens.style.left = x0 + 'px';
-                lens.style.top = y0 + 'px';
-                lens.style.width = (x1 - x0) + 'px';
-                lens.style.height = (y1 - y0) + 'px';
-                lens.hidden = false;
-            }
-
             /* #two deep-links to the second page: arrive with page one
                already dealt away, without replaying the flight. */
             one.classList.remove('selected');
             if (location.hash === '#two') target = current = 1;
             paint(current);
-            rest();
+            /* The bookkeeping only, not rest(): nobody has reached for
+               anything yet, and the PDF is a megabyte and a half that the
+               entrance should not be racing. It comes in on the timer below,
+               once the paper is up. */
+            announce();
 
             /* The entrance holds until the type has settled and the pile
                itself has decoded — the paper is the page here, so painting
@@ -740,10 +754,10 @@
             /* Warm the under-page too, so the first deal never lands on a
                page still being decoded. */
             s2.querySelector('img').decode().catch(() => { });
-            /* And warm the lens ahead of need: once the page has loaded and
+            /* And warm the words ahead of need: once the page has loaded and
                the browser has a free moment, fetch pdf.js and parse the PDF,
-               so the first pinch meets a renderer already standing instead
-               of a download just beginning. */
+               so a hand reaching to select a line meets a text layer already
+               standing instead of a download just beginning. */
             addEventListener('load', () => {
                 (self.requestIdleCallback || ((fn) => setTimeout(fn, 1000)))(() => ensurePdf());
             }, { once: true });

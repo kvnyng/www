@@ -168,6 +168,35 @@ header {
     will-change: transform;
 }
 
+/* ── The lens ───────────────────────────────────────────────────────────
+   Those three will-change hints are why this page once carried a tiled PDF
+   renderer, and this one declaration is what replaced it.
+
+   A layer promoted by will-change: transform has its raster frozen at the
+   size it was first drawn and is never redrawn afterwards, only stretched.
+   The blur that follows is not subtle and not vague: measured, it is exactly
+   the zoom times 1.4px, so at 64x the sheets are a smear of 1x pixels no
+   matter what the paper is made of. Take the hint away and the compositor
+   goes back to the tracings' own curves and rasters them at the scale the
+   transform asks for — crisp within a frame or two of the gesture settling,
+   with no ceiling worth naming: softening does not start until some sixteen
+   thousand times, and that is float precision giving out rather than any
+   limit on drawing. Those numbers were measured in Chromium, and only there;
+   WebKit has its own compositor and its own pinch path on this page (see the
+   gesture events in the script), and has not been put to the same test. The
+   mechanism is not in doubt — the figures are Chrome's.
+
+   So the pins come off exactly when the glass goes up, and not a moment
+   before, because at rest and mid-deal they are the right thing: the flight
+   is translation and rotation of paper drawn at 1x, which is the case
+   promoted layers exist for — and mid-deal cannot happen zoomed, since every
+   way of dealing steps aside while the glass is up. .scene.zoomed is set by
+   applyZoom whenever the zoom is anything but 1, and the three selectors
+   here each out-weigh their base rule, so lifting is all this has to do. */
+.scene.zoomed :is(.zoomer, .grab, .sheet) {
+    will-change: auto;
+}
+
 /* The pages are pdftocairo's SVG tracings of the real PDF — every glyph a
    path, so the type is the resume's own, not a webfont approximation, and it
    stays crisp at any size. The ink sits on transparent ground; the white
@@ -219,22 +248,6 @@ header {
 .s2 .aura {
     inset: 2% -5% -8% -5%;
     opacity: 0.3;
-}
-
-/* The lens: a canvas the real PDF is drawn into whenever the view is zoomed.
-   The sheet's base image is a texture, and a texture zoomed five times is
-   five-times-stretched pixels — the compositor never goes back to the
-   vectors. The lens does: it re-renders the visible crop from the PDF itself
-   at exactly the screen's resolution, positioned in sheet coordinates so the
-   zoomer's transform lands it 1:1 on the glass. */
-.lens {
-    position: absolute;
-    background: white;
-    pointer-events: none;
-}
-
-.lens[hidden] {
-    display: none;
 }
 
 /* The words of the actual PDF, laid invisibly over the picture of them.
