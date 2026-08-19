@@ -620,9 +620,16 @@
                 }
                 /* The deal itself. Nothing else scrolls on this page, so the
                    wheel's deltas are the hand on the pile — momentum
-                   included, since macOS delivers it as more wheel events. */
+                   included, since macOS delivers it as more wheel events.
+                   Both axes at once, added: down the pad and across it are
+                   the same push on the same pile, so a two-finger swipe
+                   deals, a scroll deals, and a gesture that is half of each
+                   deals by the whole of what it is — no axis chosen for the
+                   hand, nothing of the gesture thrown away. Every wheel
+                   event here is preventDefault'd, so a sideways one never
+                   reaches the browser's own back-and-forward gesture. */
                 e.preventDefault();
-                scrub(e.deltaY, true);
+                scrub(e.deltaX + e.deltaY, true);
             }, { passive: false });
 
             /* Safari reports a pinch as its own gesture, not a ctrl-wheel. */
@@ -646,8 +653,9 @@
                     scene.classList.add('panning');
                     e.preventDefault();
                 } else if (e.pointerType === 'touch') {
-                    /* A finger on the unzoomed pile is a hand on the deal. */
-                    touchDrag = { y: e.clientY, moved: 0 };
+                    /* A finger on the unzoomed pile is a hand on the deal,
+                       drawn down it or across it or any way between. */
+                    touchDrag = { x: e.clientX, y: e.clientY, moved: 0 };
                     try { scene.setPointerCapture(e.pointerId); } catch (err) { }
                 }
             });
@@ -660,12 +668,17 @@
                     panned = true;
                     applyZoom();
                 } else if (touchDrag) {
+                    const dx = touchDrag.x - e.clientX;
                     const dy = touchDrag.y - e.clientY;
+                    touchDrag.x = e.clientX;
                     touchDrag.y = e.clientY;
-                    touchDrag.moved += Math.abs(dy);
-                    /* Scaled so a bit over half the screen's height deals a
-                       page; committed on release, not mid-hold. */
-                    scrub(dy * (DEAL_WHEEL / (0.55 * H)), false);
+                    touchDrag.moved += Math.abs(dx) + Math.abs(dy);
+                    /* Both ways at once, as the wheel takes them — each
+                       scaled so a bit over half that side of the screen
+                       deals a page: its height going down, its width going
+                       across. Committed on release, not mid-hold. */
+                    scrub(dx * (DEAL_WHEEL / (0.55 * W)) +
+                          dy * (DEAL_WHEEL / (0.55 * H)), false);
                 }
             });
             const endPan = () => {
