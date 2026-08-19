@@ -43,6 +43,13 @@ html,
 body {
     height: 100%;
     overflow: hidden;
+    /* And no gesture is the browser's, either. A drag is the deal, a pinch
+       is the page's own glass (see the script) — the same zoomAt the desktop
+       reaches through ctrl-wheel — so every touch goes to the script whole.
+       Left at pinch-zoom, the browser seized the pair mid-gesture and zoomed
+       the whole room natively — header, counter and all — sliding the
+       document around the screen instead of magnifying the paper. */
+    touch-action: none;
 }
 
 body {
@@ -95,13 +102,11 @@ header {
 /* ── The scene ──────────────────────────────────────────────────────────
    One viewport, holding everything. overflow: clip, not hidden: the flying
    sheet leaves through this box's edges, and clip trims it without minting
-   a scroll container. touch-action keeps the browser's pinch (a phone's
-   native zoom) while handing vertical drags to the script as pointer
-   events — they are the deal on a phone. */
+   a scroll container. Touch is settled above, on body: none of it is the
+   browser's — a finger deals, two pinch the glass, all through the script. */
 .scene {
     position: relative;
     height: 100svh;
-    touch-action: pinch-zoom;
     overflow: clip;
     display: flex;
     flex-direction: column;

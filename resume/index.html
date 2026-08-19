@@ -131,9 +131,11 @@
 
     <noscript>
         <style>
-            /* No script means no deal: give the document its scroll back and
-               lay the two pages out as plain reading, one above the other. */
-            html, body { overflow: auto; height: auto; }
+            /* No script means no deal: give the document its scroll back —
+               and the browser its touch gestures, since nothing else is here
+               to answer them — and lay the two pages out as plain reading,
+               one above the other. */
+            html, body { overflow: auto; height: auto; touch-action: auto; }
             .scene { position: static; height: auto; overflow: visible; padding: 6rem 0 3rem; }
             .pile { aspect-ratio: auto; width: min(92vw, 38rem); }
             .grab { position: static; cursor: default; }
@@ -524,10 +526,11 @@
             });
 
             /* ── The magnifying glass ─────────────────────────────────────
-               Pinch (which browsers report as a ctrl-wheel), or a literal
-               ctrl-scroll, zooms about the cursor; shift-drag or right-drag
-               pans. All of it is one transform on the zoomer, so the flight
-               and the deal are untouched underneath it. */
+               A trackpad pinch (which browsers report as a ctrl-wheel), a
+               literal ctrl-scroll, or two fingers on the paper itself zoom
+               about the hand; shift-drag, right-drag, or a finger under the
+               glass pans. All of it is one transform on the zoomer, so the
+               flight and the deal are untouched underneath it. */
             let z = 1, panX = 0, panY = 0;
             let panning = false, panned = false, lx = 0, ly = 0;
             let zoomIdle = null;
@@ -703,19 +706,75 @@
                 scrub(e.deltaX + e.deltaY, true);
             }, { passive: false });
 
-            /* Safari reports a pinch as its own gesture, not a ctrl-wheel. */
+            /* ── Fingers ──────────────────────────────────────────────────
+               Every touch on the scene lands here, by id: one finger is a
+               hand on the deal — or on the pan, under the glass — and two
+               are a pinch. The stylesheet's touch-action: none is the other
+               half of this: the browser never seizes the pair for a native
+               zoom of the whole room, so a pinch reaches the same glass the
+               desktop's ctrl-wheel does, and the paper is what magnifies. */
+            const touches = new Map();
+            let pinch = null;
+
+            /* What a pinch measures against: the pair's spread and midpoint,
+               taken fresh whenever the set of fingers changes, so a third
+               finger landing or the first one leaving never jolts the
+               glass. */
+            function rebasePinch() {
+                const [a, b] = touches.values();
+                pinch = {
+                    dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+                    z,
+                    mx: (a.x + b.x) / 2,
+                    my: (a.y + b.y) / 2,
+                };
+            }
+
+            /* Safari reports a trackpad pinch as its own gesture, not a
+               ctrl-wheel — and on iOS the same events fire for a touch pinch
+               too, alongside the pointer pair already handling it above.
+               With fingers down these only silence the browser's own zoom;
+               the pointers are the ones speaking. */
             let gestureBase = 1;
             addEventListener('gesturestart', (e) => { e.preventDefault(); gestureBase = z; });
             addEventListener('gesturechange', (e) => {
                 e.preventDefault();
+                if (touches.size) return;
                 zoomAt(e.clientX, e.clientY, gestureBase * e.scale);
             });
             addEventListener('gestureend', (e) => e.preventDefault());
 
             let touchDrag = null;
             scene.addEventListener('pointerdown', (e) => {
-                if (e.button === 2 || (e.button === 0 && e.shiftKey) ||
-                    (e.pointerType === 'touch' && z > 1)) {
+                if (e.pointerType === 'touch') {
+                    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                    try { scene.setPointerCapture(e.pointerId); } catch (err) { }
+                    if (touches.size >= 2) {
+                        /* The second finger turns whatever the first was
+                           doing into a pinch: a deal-scrub stops mid-word
+                           and settles where it is, a pan simply hands
+                           over. */
+                        if (touchDrag) { touchDrag = null; armIdle(); }
+                        panning = false;
+                        scene.classList.remove('panning');
+                        rebasePinch();
+                        e.preventDefault();
+                    } else if (z > 1) {
+                        panning = true;
+                        panned = false;
+                        lx = e.clientX;
+                        ly = e.clientY;
+                        scene.classList.add('panning');
+                        e.preventDefault();
+                    } else {
+                        /* A finger on the unzoomed pile is a hand on the
+                           deal, drawn down it or across it or any way
+                           between. */
+                        touchDrag = { x: e.clientX, y: e.clientY, moved: 0 };
+                    }
+                    return;
+                }
+                if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
                     panning = true;
                     panned = false;
                     lx = e.clientX;
@@ -723,15 +782,31 @@
                     try { scene.setPointerCapture(e.pointerId); } catch (err) { }
                     scene.classList.add('panning');
                     e.preventDefault();
-                } else if (e.pointerType === 'touch') {
-                    /* A finger on the unzoomed pile is a hand on the deal,
-                       drawn down it or across it or any way between. */
-                    touchDrag = { x: e.clientX, y: e.clientY, moved: 0 };
-                    try { scene.setPointerCapture(e.pointerId); } catch (err) { }
                 }
             });
             scene.addEventListener('pointermove', (e) => {
-                if (panning) {
+                const t = touches.get(e.pointerId);
+                if (t) {
+                    t.x = e.clientX;
+                    t.y = e.clientY;
+                }
+                if (pinch) {
+                    if (!t) return;
+                    /* The pair's spread against the spread it began at sets
+                       the zoom, and the sheet rides the midpoint: spread to
+                       magnify, drift to carry, both in the one gesture —
+                       zoomAt then keeps the paper under the midpoint under
+                       the midpoint. */
+                    const [a, b] = touches.values();
+                    const mx = (a.x + b.x) / 2;
+                    const my = (a.y + b.y) / 2;
+                    panX += mx - pinch.mx;
+                    panY += my - pinch.my;
+                    pinch.mx = mx;
+                    pinch.my = my;
+                    zoomAt(mx, my,
+                        pinch.z * Math.hypot(b.x - a.x, b.y - a.y) / pinch.dist);
+                } else if (panning) {
                     panX += e.clientX - lx;
                     panY += e.clientY - ly;
                     lx = e.clientX;
@@ -752,7 +827,25 @@
                           dy * (DEAL_WHEEL / (0.55 * H)), false);
                 }
             });
-            const endPan = () => {
+            const endPan = (e) => {
+                if (e.pointerType === 'touch') {
+                    touches.delete(e.pointerId);
+                    if (pinch) {
+                        if (touches.size >= 2) { rebasePinch(); return; }
+                        pinch = null;
+                        if (touches.size === 1 && z > 1) {
+                            /* One finger stays down: the pinch hands off to
+                               a pan without the paper feeling the change of
+                               grip. */
+                            const [t] = touches.values();
+                            panning = true;
+                            lx = t.x;
+                            ly = t.y;
+                            scene.classList.add('panning');
+                            return;
+                        }
+                    }
+                }
                 if (touchDrag) {
                     if (touchDrag.moved > 8) panned = true;
                     touchDrag = null;
