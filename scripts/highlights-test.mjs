@@ -553,6 +553,94 @@ try {
     check('and the menu closes', !(await evaluate('__hl.menu().open')));
     await evaluate('__hl.clear()');
 
+    /* ── The menu under the glass ─────────────────────────────────────── */
+
+    /* Zoomed in, a passage that wraps a line is as wide as the enlarged
+     * sheet: its bounding box runs far past the screen, and a menu centred
+     * on that box parks in a corner. The menu must speak about the words a
+     * reader can see. */
+    await evaluate(`(async () => {
+        const frame = () => new Promise((r) => requestAnimationFrame(r));
+        for (let i = 0; i < 24; i++) {
+            dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -24,
+                clientX: innerWidth / 2, clientY: innerHeight / 2, cancelable: true, bubbles: true }));
+            await frame();
+        }
+    })()`);
+    await sleep(700); /* past the settle, whatever mechanism holds the scale */
+    /* The scale lives on the zoomer's transform mid-gesture and on .grab's
+     * CSS zoom once settled; the glass's height is the product. */
+    const glass = await evaluate(`(() => {
+        const m = getComputedStyle(document.querySelector('.zoomer')).transform;
+        const a = m && m !== 'none' ? parseFloat(m.slice(m.indexOf('(') + 1)) : 1;
+        const gz = parseFloat(getComputedStyle(document.querySelector('.grab')).zoom) || 1;
+        return a * gz;
+    })()`);
+    check('the glass goes up', glass > 4, `effective zoom ${glass}`);
+    const wrapped = await evaluate(`(() => {
+        const layer = document.querySelector('.s1 .textlayer');
+        const w = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        for (let t; (t = w.nextNode());) if (t.data.trim().length) nodes.push(t);
+        for (let i = 0; i < nodes.length; i++) {
+            const r = document.createRange();
+            r.selectNodeContents(nodes[i]);
+            const b = r.getBoundingClientRect();
+            if (b.width > 0 && b.left >= 0 && b.top >= 80 &&
+                b.right <= innerWidth && b.bottom <= innerHeight - 80) {
+                /* Reach forward until the box is wider than the screen —
+                 * the pathological shape this section exists to hold. */
+                let bb = b;
+                for (let j = i + 1; j < nodes.length && bb.width <= innerWidth; j++) {
+                    r.setEnd(nodes[j], nodes[j].data.length);
+                    bb = r.getBoundingClientRect();
+                }
+                const sel = getSelection();
+                sel.removeAllRanges();
+                sel.addRange(r);
+                return { w: bb.width, text: sel.toString().slice(0, 20) };
+            }
+        }
+        return null;
+    })()`);
+    check('a wrapped run outruns the screen', !!wrapped
+        && wrapped.w > (await evaluate('innerWidth')), JSON.stringify(wrapped));
+    menu = await until(() => evaluate('__hl.menu().open && __hl.menu()'), 3000);
+    check('the menu rises under the glass', !!menu && menu.mode === 'draft', JSON.stringify(menu));
+
+    /* Where the menu hangs, against where the visible words are — the
+     * range's line boxes clipped to the viewport, by hand here. */
+    const seen = `((range) => {
+        let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+        for (const box of range.getClientRects()) {
+            const cl = Math.max(box.left, 0), cr = Math.min(box.right, innerWidth);
+            const ct = Math.max(box.top, 0), cb = Math.min(box.bottom, innerHeight);
+            if (cr <= cl || cb <= ct) continue;
+            if (cl < l) l = cl; if (ct < t) t = ct;
+            if (cr > r) r = cr; if (cb > b) b = cb;
+        }
+        const m = document.querySelector('.hl-menu').getBoundingClientRect();
+        return { vis: { l, t, r, b }, menu: { l: m.left, t: m.top, r: m.right, b: m.bottom },
+            inner: { w: innerWidth, h: innerHeight } };
+    })`;
+    const overWords = (p) =>
+        p.menu.l >= 0 && p.menu.t >= 0 && p.menu.r <= p.inner.w && p.menu.b <= p.inner.h &&
+        (p.menu.l + p.menu.r) / 2 > p.vis.l && (p.menu.l + p.menu.r) / 2 < p.vis.r &&
+        p.menu.b <= p.vis.t && p.vis.t - p.menu.b <= 30;
+    let placed = await evaluate(`${seen}(getSelection().getRangeAt(0))`);
+    check('the menu hangs over the words on screen', overWords(placed), JSON.stringify(placed));
+
+    /* And again once the color lands — the menu re-shows about the mark,
+     * the same placement a clicked wash gets. */
+    await evaluate('__bench.press(".hl-swatch[data-color=\\"2\\"]")');
+    await until(() => evaluate('__hl.menu().mode === "mark"'), 3000);
+    placed = await evaluate(`${seen}([...CSS.highlights.get('hl2')][0])`);
+    check('and still over the wash it just made', overWords(placed), JSON.stringify(placed));
+
+    await evaluate('__hl.clear()');
+    await evaluate('dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
+    await sleep(300);
+
     /* ── Bad and stale links ──────────────────────────────────────────── */
 
     check('a mangled fragment falls back to a clean page',

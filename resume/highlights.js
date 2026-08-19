@@ -304,7 +304,28 @@
 
     /* Fixed positioning against the viewport — this page never scrolls, the
      * paper moves under its transforms instead, and the rects the ranges
-     * report already have every transform folded in. */
+     * report already have every transform folded in. But under the glass a
+     * range can run far past the screen: a passage that wraps a line is as
+     * wide as the zoomed sheet, and a wash clicked at 8x may begin pages of
+     * screen away. Centring on that box points at paper nobody can see, and
+     * the clamp then parks the pill toward a corner — so the menu is placed
+     * by the part of the range actually on screen: its line boxes clipped
+     * to the viewport, united. */
+    function visibleRect(range) {
+        let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+        for (const box of range.getClientRects()) {
+            const cl = Math.max(box.left, 0), cr = Math.min(box.right, innerWidth);
+            const ct = Math.max(box.top, 0), cb = Math.min(box.bottom, innerHeight);
+            if (cr <= cl || cb <= ct) continue;
+            if (cl < l) l = cl;
+            if (ct < t) t = ct;
+            if (cr > r) r = cr;
+            if (cb > b) b = cb;
+        }
+        return r > l ? { left: l, top: t, bottom: b, width: r - l }
+            : range.getBoundingClientRect();
+    }
+
     function showMenu(newMode, range) {
         mode = newMode;
         menu.dataset.mode = newMode;
@@ -312,7 +333,7 @@
         menu.style.visibility = 'hidden';
         menu.classList.add('open');
         const mw = menu.offsetWidth, mh = menu.offsetHeight;
-        const rect = range.getBoundingClientRect();
+        const rect = visibleRect(range);
         let left = rect.left + rect.width / 2 - mw / 2;
         left = Math.max(8, Math.min(left, innerWidth - mw - 8));
         let top = rect.top - mh - 10;
