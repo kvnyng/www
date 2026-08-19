@@ -856,6 +856,17 @@
             };
             scene.addEventListener('pointerup', endPan);
             scene.addEventListener('pointercancel', endPan);
+            /* If the window loses the fingers themselves — an app switch, a
+               system sheet — the pointers can stop reporting without a
+               pointerup, so the grip is opened rather than left half
+               closed. */
+            addEventListener('blur', () => {
+                touches.clear();
+                pinch = null;
+                touchDrag = null;
+                panning = false;
+                scene.classList.remove('panning');
+            });
             /* The right button pans, so the menu it usually carries is off
                within the scene. */
             scene.addEventListener('contextmenu', (e) => e.preventDefault());
