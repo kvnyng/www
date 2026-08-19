@@ -263,22 +263,123 @@ header {
     user-select: text;
     -webkit-user-select: text;
     cursor: text;
+    /* A phone browser must not inflate the invisible type it thinks is
+       too small to read — the sizes below are exact or they are wrong. */
+    text-size-adjust: none;
+    -webkit-text-size-adjust: none;
+    /* The layer's only visible paint is the selection, and multiply turns
+       that paint into a highlighter: the wash tints the paper and leaves
+       the ink black, instead of lying over both and rusting the words. */
+    mix-blend-mode: multiply;
+    /* pdf.js speaks in custom properties and leaves the spending of them
+       to the host's stylesheet: each span carries its own --font-height
+       and --scale-x, the layer gets --scale-factor and --min-font-size
+       from the script, and these are the derived middle terms its own
+       viewer would define. Without the rules below the words rendered at
+       the room's font size — wider than the ink they were meant to lie
+       on — and a selection crossing a line painted that invisible
+       overhang as a band running to the paper's edge. */
+    --user-unit: 1;
+    --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+    --scale-round-x: 1px;
+    --scale-round-y: 1px;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size, 1));
+    --min-font-size-inv: calc(1 / var(--min-font-size, 1));
 }
 
-.textlayer :is(span, br) {
+/* Direct children only: the furniture spans nested inside a line (the
+   split-off bullets, below) must stay in their line's flow, not be pulled
+   out and resized as lines of their own. */
+.textlayer > :is(span, br) {
     position: absolute;
     white-space: pre;
     transform-origin: 0 0;
     color: transparent;
+    /* Above the catcher when it opens — see .endofcontent. */
+    z-index: 1;
+    /* The two halves of pdf.js's sizing contract: the glyph height, and
+       the horizontal squeeze that makes this font's run of words end
+       exactly where the traced ink's does. */
+    font-size: calc(var(--text-scale-factor) * var(--font-height, 0));
+    transform: rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1))
+        scale(var(--min-font-size-inv));
 }
 
+/* The type's furniture — the bullets that open lines and the dots that
+   separate the header's entries. They mark structure rather than say
+   anything, so the hand that sweeps across them takes no hold: no wash,
+   nothing carried away in the copy, and no dead spot either — a press
+   that lands on a bullet falls through and anchors in the line it opens,
+   instead of being refused by an unselectable glyph. */
+.textlayer .deco {
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+}
+
+/* The air around a separator dot — pdf.js gives each gap's space a span
+   of its own. It stays selectable, so a copy keeps the entries apart, but
+   selected air takes no wash: a lit space beside an unlit dot would only
+   be the dot's ghost. */
+.textlayer .spacer::selection {
+    background: transparent;
+}
+
+/* Opaque, not translucent. The spans' rectangles overlap — pdf.js sizes
+   each to its own run — and translucent rectangles draw their overlaps as
+   darker seams. One flat color merges them into a single stroke of the
+   pen; multiply above is what lets a flat color through to the paper. The
+   color is the accent terracotta diluted to highlighter strength. */
 .textlayer ::selection {
-    background: rgba(199, 91, 59, 0.35);
+    background: #EFBFA8;
+}
+
+/* The line breaks are layout, not words — their rectangles are stray
+   marks between lines. */
+.textlayer br::selection {
+    background: transparent;
 }
 
 .textlayer a {
     position: absolute;
     cursor: pointer;
+    z-index: 1;
+    /* Invisible to the selection. The anchors are empty boxes over the
+       ink, and last in the layer — let a drag's cursor resolve into one
+       and Chromium selects everything back to it. Unselectable, the
+       cursor falls through to the words beneath. */
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* And while a selection is being drawn, the boxes step out of the way
+   entirely, so the words under a link — the email, above all — can be
+   swept like any others. At rest they return to being clickable. */
+.textlayer.selecting a {
+    pointer-events: none;
+}
+
+/* The catcher, from pdf.js's own viewer. A Chromium browser resolves a
+   cursor that has wandered off the words to the nearest text position in
+   the layer — which, from the empty paper under a paragraph, means the
+   selection leaps to swallow everything before it. So while a selection
+   is being made (the script's .selecting) this div opens from a hairline
+   at the layer's foot to cover the whole sheet, underneath the words:
+   the empty paper becomes a selectable nothing for the cursor to land
+   on, and the script walks it alongside the selection's moving edge so
+   a leap can never outgrow the span under the hand. */
+.textlayer .endofcontent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: 0;
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.textlayer.selecting .endofcontent {
+    top: 0;
 }
 
 /* The tools withdraw under the glass with the caption — same reasoning,

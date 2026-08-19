@@ -693,6 +693,17 @@
                 try {
                     const lib = await import('./vendor/pdf.min.js');
                     lib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
+                    /* The overlay must wear the page's own face. pdf.js lays
+                       each run in a generic family and squeezes it (--scale-x)
+                       until its ends meet the printed run's — which pins the
+                       edges but lets every position inside a span follow the
+                       wrong font's advances, so a highlight or a selection
+                       mid-line drifts off the ink. The resume is EB Garamond
+                       and the site already serves it; this map is consulted
+                       for both the spans' style and the measurement behind
+                       --scale-x, so glyphs and calibration move together. */
+                    lib.TextLayer.fontFamilyMap.set('serif', "'EB Garamond', serif");
+                    lib.TextLayer.fontFamilyMap.set('sans-serif', "'EB Garamond', sans-serif");
                     const doc = await lib.getDocument('/kevin_yang_resume.pdf').promise;
                     pdfLib = lib;
                     pdfPages = [await doc.getPage(1), await doc.getPage(2)];
@@ -718,12 +729,18 @@
             let textBuiltAt = 0;
             async function buildTextLayers() {
                 if (!pdfLib || !pdfPages[0]) return;
+                /* Measure only once the face is truly in: --scale-x comes
+                   from a canvas measurement, and one taken against the
+                   fallback while Garamond swaps in later would calibrate
+                   the squeeze to a font no longer on the glass. */
+                await document.fonts.load('1em "EB Garamond"');
                 const wpx = pile.offsetWidth;
                 if (!wpx || wpx === textBuiltAt) return;
                 textBuiltAt = wpx;
                 for (let i = 0; i < 2; i++) {
                     const container = textLayers[i];
                     container.replaceChildren();
+                    catchers.delete(container);
                     const viewport = pdfPages[i].getViewport({ scale: wpx / 612 });
                     container.style.setProperty('--scale-factor', viewport.scale);
                     await new pdfLib.TextLayer({
@@ -731,6 +748,37 @@
                         container,
                         viewport,
                     }).render();
+                    /* The furniture is printed, not written: a dot that
+                       separates the header's entries, a bullet that opens a
+                       line, and the breaths of air either side. The dots and
+                       bullets go .deco — unselectable, uncopyable; a dot is
+                       a span of its own, a bullet shares its line's span and
+                       is split off into a nested one. The air is different:
+                       pdf.js gives each gap's space its own span, and those
+                       stay selectable so a copy keeps the entries apart, but
+                       go .spacer — selected air takes no wash. */
+                    for (const span of container.querySelectorAll(':scope > span')) {
+                        const text = span.textContent;
+                        if (span.firstChild.nodeType !== Node.TEXT_NODE) continue;
+                        if (/^\s+$/.test(text)) {
+                            span.classList.add('spacer');
+                            continue;
+                        }
+                        if (/^[\s·]+$/.test(text)) {
+                            span.classList.add('deco');
+                            continue;
+                        }
+                        const lead = text.match(/^[•·]+\s*/);
+                        if (lead) {
+                            /* A bullet opening its line: split off, spaces
+                               and all, so a copied line starts at its words. */
+                            const rest = span.firstChild.splitText(lead[0].length);
+                            const deco = document.createElement('span');
+                            deco.className = 'deco';
+                            deco.appendChild(span.firstChild);
+                            span.insertBefore(deco, rest);
+                        }
+                    }
                     /* The document's own hyperlinks, as real anchors. */
                     for (const a of await pdfPages[i].getAnnotations()) {
                         if (a.subtype !== 'Link' || !a.url) continue;
@@ -745,8 +793,90 @@
                         link.style.height = Math.abs(y2 - y1) + 'px';
                         container.appendChild(link);
                     }
+                    /* The selection's safety net, last in the layer — see
+                       the catcher block below and .endofcontent in the
+                       stylesheet. */
+                    const end = document.createElement('div');
+                    end.className = 'endofcontent';
+                    container.appendChild(end);
+                    catchers.set(container, end);
                 }
             }
+
+            /* ── The catcher ──────────────────────────────────────────────
+               Drag a selection off the words and onto the empty paper, and
+               Chromium resolves the cursor to the nearest text position in
+               the layer — which, from below a paragraph, is the far end of
+               everything before it: one slip and the whole page lights up.
+               This is pdf.js's own viewer remedy, carried over. While a
+               selection is being made, its layer wears .selecting and the
+               catcher div opens to cover the sheet beneath the words, so
+               the empty paper is itself a selectable nothing for the cursor
+               to land on. And because Chromium would still leap across all
+               the text between the selection and wherever the catcher sits
+               in the DOM, the catcher is re-seated beside the selection's
+               moving edge on every change — a leap can never outgrow the
+               span under the hand. Firefox needs only the cover. */
+            const catchers = new Map();
+            const resetCatchers = () => {
+                for (const [layer, end] of catchers) {
+                    layer.append(end);
+                    end.style.width = end.style.height = '';
+                    end.style.userSelect = '';
+                    layer.classList.remove('selecting');
+                }
+            };
+            let pointerIsDown = false;
+            let prevRange = null;
+            const isFirefox = CSS.supports('-moz-user-select', 'none');
+            for (const layer of textLayers) {
+                layer.addEventListener('mousedown', () => layer.classList.add('selecting'));
+            }
+            addEventListener('pointerdown', () => { pointerIsDown = true; });
+            addEventListener('pointerup', () => { pointerIsDown = false; resetCatchers(); });
+            addEventListener('blur', () => { pointerIsDown = false; resetCatchers(); });
+            addEventListener('keyup', () => { if (!pointerIsDown) resetCatchers(); });
+            document.addEventListener('selectionchange', () => {
+                const sel = document.getSelection();
+                if (!sel.rangeCount) { resetCatchers(); return; }
+                for (const [layer] of catchers) {
+                    let touched = false;
+                    for (let i = 0; i < sel.rangeCount; i++) {
+                        if (sel.getRangeAt(i).intersectsNode(layer)) { touched = true; break; }
+                    }
+                    if (touched) layer.classList.add('selecting');
+                    else {
+                        layer.append(catchers.get(layer));
+                        layer.classList.remove('selecting');
+                    }
+                }
+                if (isFirefox) return;
+                /* Which edge of the selection is moving, and the span it
+                   is moving through — the walk mirrors pdf.js verbatim. */
+                const range = sel.getRangeAt(0);
+                const modifyStart = prevRange &&
+                    (range.compareBoundaryPoints(Range.END_TO_END, prevRange) === 0 ||
+                        range.compareBoundaryPoints(Range.START_TO_END, prevRange) === 0);
+                let anchor = modifyStart ? range.startContainer : range.endContainer;
+                if (anchor.nodeType === Node.TEXT_NODE) anchor = anchor.parentNode;
+                if (anchor.classList?.contains('deco')) anchor = anchor.parentNode;
+                if (!modifyStart && range.endOffset === 0) {
+                    do {
+                        while (!anchor.previousSibling) anchor = anchor.parentNode;
+                        anchor = anchor.previousSibling;
+                    } while (!anchor.childNodes.length);
+                }
+                const layer = anchor.parentElement?.closest('.textlayer');
+                const end = catchers.get(layer);
+                if (end) {
+                    end.style.width = layer.style.width;
+                    end.style.height = layer.style.height;
+                    end.style.userSelect = 'text';
+                    anchor.parentElement.insertBefore(end,
+                        modifyStart ? anchor : anchor.nextSibling);
+                }
+                prevRange = range.cloneRange();
+            });
 
             /* #two deep-links to the second page: arrive with page one
                already dealt away, without replaying the flight. */
