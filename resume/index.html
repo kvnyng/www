@@ -16,6 +16,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resume</title>
     <meta name="description" content="Kevin Yang's resume — a pile of pages dealt by scroll, or the PDF to take with you.">
+    <link rel="canonical" href="https://kvnyng.com/resume/">
+
+    <!-- The card a shared link unfurls into. A scraper gets one still and no
+         script, so the pile it would have dealt is drawn for it ahead of time
+         by scripts/og-card.mjs — the same room, the same two sheets, arranged
+         for one frame. Re-run that script when the resume is re-exported.
+
+         Absolute URLs on purpose: a scraper resolves these against nothing. -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Kevin Yang">
+    <meta property="og:url" content="https://kvnyng.com/resume/">
+    <meta property="og:title" content="Kevin Yang Resume">
+    <meta property="og:description" content="Two pages, dealt by scroll — or the PDF to take with you.">
+    <meta property="og:image" content="https://kvnyng.com/assets/images/resume-og.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The words Kevin Yang Resume set on a dark ground above two resume pages, lying askew and running off the bottom edge.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Kevin Yang Resume">
+    <meta name="twitter:description" content="Two pages, dealt by scroll — or the PDF to take with you.">
+    <meta name="twitter:image" content="https://kvnyng.com/assets/images/resume-og.png">
 
     <!-- Served from this origin, not Google's — mirrored into assets/fonts by
          scripts/fonts-vendor.mjs. The entrance waits on document.fonts.ready,
