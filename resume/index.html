@@ -335,7 +335,7 @@
                 const dt = last === null ? 16.7 : ts - last;
                 last = ts;
                 /* Time-based decay so the trail feels the same at 60 and 120Hz. */
-                const k = reduced.matches ? 1 : 1 - Math.pow(0.818, dt / 16.7);
+                const k = reduced.matches ? 1 : 1 - Math.pow(0.725, dt / 16.7);
                 /* The navigation tween eases an asked-for page in — only
                    ever started by an explicit request, never by the clock. */
                 if (tweenTo !== null) {
@@ -355,7 +355,7 @@
                 /* The overscroll spring: the pushed-to point sags toward zero
                    on its own clock, and the paper trails it — out fast under
                    the hand, home on an easing arc when the hand lets go. */
-                overTarget -= overTarget * (1 - Math.pow(0.852, dt / 16.7));
+                overTarget -= overTarget * (1 - Math.pow(0.774, dt / 16.7));
                 if (Math.abs(overTarget) < 0.002) overTarget = 0;
                 const od = overTarget - overCurrent;
                 overCurrent = (overTarget === 0 && Math.abs(od) < 0.002) ? 0 : overCurrent + od * k;
@@ -410,14 +410,46 @@
                 kick();
             }
 
+            /* macOS goes on sending wheel events after the fingers lift —
+               the same momentum that carries a deal through. At the end of
+               the track that tail is indistinguishable from a hand still
+               pushing, and it holds the swing out against the swing's own
+               decay: push and decay come into balance, the paper hangs at
+               the far end, and only once the tail dies does it start home.
+               That hang is the pause at the turn.
+
+               Momentum falls away monotonically where a hand is ragged, so
+               three deltas in a row that only shrink are read as the hand
+               having gone. A delta above the run's peak, or a gap, is a new
+               push, and the swing listens again. */
+            const FADE_RUN = 3;         // shrinking deltas in a row that mean the hand has lifted
+            let prevPush = 0, peakPush = 0, fading = 0, lastPush = 0, released = false;
+
+            function handOn(dy) {
+                const now = performance.now();
+                const mag = Math.abs(dy);
+                if (now - lastPush > 120) { peakPush = prevPush = fading = 0; released = false; }
+                lastPush = now;
+                if (mag > peakPush) { peakPush = mag; fading = 0; released = false; }
+                else if (mag <= prevPush * 0.995) { if (++fading >= FADE_RUN) released = true; }
+                else fading = 0;
+                prevPush = mag;
+                return !released;
+            }
+
             /* One entry point for every dealing gesture, in wheel pixels.
-               At the ends the push spills into the overscroll swing. */
+               At the ends the push spills into the overscroll swing — every
+               pixel of it, from the first: the paper answers the hand at
+               whatever speed the hand arrives, and how far it swings is the
+               only thing the push decides. */
             function scrub(dy, settleOnIdle) {
                 if (target <= 0 && dy < 0) {
-                    if (!reduced.matches) overTarget = clamp(overTarget - dy * 0.0046, 0, 1);
+                    if (!reduced.matches && handOn(dy)) overTarget = clamp(overTarget - dy * 0.0046, 0, 1);
                 } else if (target >= 1 && dy > 0) {
-                    if (!reduced.matches) overTarget = clamp(overTarget - dy * 0.0046, -1, 0);
+                    if (!reduced.matches && handOn(dy)) overTarget = clamp(overTarget - dy * 0.0046, -1, 0);
                 } else {
+                    peakPush = prevPush = fading = 0;
+                    released = false;
                     tweenTo = null;
                     target = clamp(target + dy / DEAL_WHEEL, 0, 1);
                 }
