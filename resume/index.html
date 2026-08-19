@@ -428,23 +428,42 @@
                the far end, and only once the tail dies does it start home.
                That hang is the pause at the turn.
 
-               Momentum falls away monotonically where a hand is ragged, so
-               three deltas in a row that only shrink are read as the hand
-               having gone. A delta above the run's peak, or a gap, is a new
-               push, and the swing listens again. */
-            const FADE_RUN = 3;         // shrinking deltas in a row that mean the hand has lifted
-            let prevPush = 0, peakPush = 0, fading = 0, lastPush = 0, released = false;
+               What separates the two is trend, not any single delta: a tail
+               only ever falls, where a hand wanders about a level. So the
+               deltas are read through two running averages, one quick to
+               follow and one slow, and the hand counts as gone whenever the
+               quick one has fallen clear of the slow one. Nothing latches —
+               the moment a new push lifts the quick average back, the swing
+               is listening again, which is what lets one gesture follow
+               another with the first one's tail still arriving. */
+            const TREND = 0.95;         // how far the quick average must fall to mean a tail
+            const EMA_FAST = 0.50;      // how quickly the quick average follows
+            const EMA_SLOW = 0.08;      // how quickly the slow one does
+            let emaFast = 0, emaSlow = 0, lastPush = 0;
 
             function handOn(dy) {
                 const now = performance.now();
-                const mag = Math.abs(dy);
-                if (now - lastPush > 120) { peakPush = prevPush = fading = 0; released = false; }
+                if (now - lastPush > 120) emaFast = emaSlow = 0;
                 lastPush = now;
-                if (mag > peakPush) { peakPush = mag; fading = 0; released = false; }
-                else if (mag <= prevPush * 0.995) { if (++fading >= FADE_RUN) released = true; }
-                else fading = 0;
-                prevPush = mag;
-                return !released;
+                const mag = Math.abs(dy);
+                emaFast += (mag - emaFast) * EMA_FAST;
+                emaSlow += (mag - emaSlow) * EMA_SLOW;
+                return !(emaSlow > 1 && emaFast < emaSlow * TREND);
+            }
+
+            /* The swing approaches its limit rather than arriving at it: a
+               push buys a share of the room that is left, so a shove closes
+               most of the gap and the next closes most of what remains, and
+               the paper is always still travelling, however little. Against
+               a hard ceiling it would park at the far end for as long as the
+               hand kept pushing, and paper parked dead is what reads as a
+               hold when the swing comes to turn. */
+            const SWING_GAIN = 0.0095;  // share of the room left that one wheel pixel buys
+            const SWING_STEP = 0.6;     // most of that room any single event may take
+
+            function swell(over, push) {
+                const step = Math.min(SWING_STEP, Math.abs(push) * SWING_GAIN);
+                return over + Math.sign(push) * step * (1 - Math.abs(over));
             }
 
             /* One entry point for every dealing gesture, in wheel pixels.
@@ -454,12 +473,11 @@
                only thing the push decides. */
             function scrub(dy, settleOnIdle) {
                 if (target <= 0 && dy < 0) {
-                    if (!reduced.matches && handOn(dy)) overTarget = clamp(overTarget - dy * 0.0046, 0, 1);
+                    if (!reduced.matches && handOn(dy)) overTarget = clamp(swell(overTarget, -dy), 0, 1);
                 } else if (target >= 1 && dy > 0) {
-                    if (!reduced.matches && handOn(dy)) overTarget = clamp(overTarget - dy * 0.0046, -1, 0);
+                    if (!reduced.matches && handOn(dy)) overTarget = clamp(swell(overTarget, -dy), -1, 0);
                 } else {
-                    peakPush = prevPush = fading = 0;
-                    released = false;
+                    emaFast = emaSlow = 0;
                     tweenTo = null;
                     target = clamp(target + dy / DEAL_WHEEL, 0, 1);
                 }
