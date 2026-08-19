@@ -52,6 +52,10 @@
     <link rel="preload" href="page-2.svg" as="image" type="image/svg+xml">
     <link rel="stylesheet" href="style.css">
 
+    <!-- The highlighter: sweep some words, keep the wash, share it — the
+         marks live in the URL fragment, beside the deal's #two. -->
+    <script src="highlights.js" defer></script>
+
     <!-- Inline and synchronous on purpose: this has to land before the first
          paint, or the page flashes at full opacity before the entrance runs.
 
@@ -375,7 +379,13 @@
             /* The pile is at rest on a page: tell the world which. */
             function announce() {
                 const onTwo = target >= 0.5;
-                history.replaceState(null, '', onTwo ? '#two' : location.pathname);
+                /* The fragment is shared ground: the resting page's word
+                   lives beside the highlighter's hl= (highlights.js), so
+                   each writer re-composes the whole from both facts rather
+                   than overwriting the other's. */
+                const hl = (location.hash.match(/hl=[A-Za-z0-9_-]+/) || [])[0];
+                const frag = [onTwo ? 'two' : '', hl].filter(Boolean).join('&');
+                history.replaceState(null, '', frag ? '#' + frag : location.pathname);
                 status.textContent = onTwo ? 'Showing page two of two' : 'Showing page one of two';
             }
 
@@ -881,7 +891,9 @@
             /* #two deep-links to the second page: arrive with page one
                already dealt away, without replaying the flight. */
             one.classList.remove('selected');
-            if (location.hash === '#two') target = current = 1;
+            /* A shared link may carry highlights in the same fragment, so
+               the page's word is a token in it, not the whole of it. */
+            if (/(^#|&)two(&|$)/.test(location.hash)) target = current = 1;
             paint(current);
             /* The bookkeeping only, not rest(): nobody has reached for
                anything yet, and the PDF is a megabyte and a half that the

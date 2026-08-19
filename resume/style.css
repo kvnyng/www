@@ -382,6 +382,138 @@ header {
     top: 0;
 }
 
+/* ── The highlighter ────────────────────────────────────────────────────
+   highlights.js registers hl0..hl3 (one per pen) and hlx (the mark the open
+   menu is about) as CSS Custom Highlights over the text layers' words.
+   Opaque washes, same reasoning as ::selection above: the spans' rectangles
+   overlap, translucent fills draw their overlaps as darker seams, and the
+   layer's multiply is what lets a flat color through to the paper while the
+   ink stays black. Highlighter-strength dilutions of a small set of pens;
+   the swatch rules further down are the same four colors, shown as dots on
+   the menu. */
+
+::highlight(hl0) {
+    background-color: #F2DC8C;
+}
+
+::highlight(hl1) {
+    background-color: #EFBFA8;
+}
+
+::highlight(hl2) {
+    background-color: #C6DBAE;
+}
+
+::highlight(hl3) {
+    background-color: #C4CFEE;
+}
+
+/* The mark under discussion: a pen line beneath the wash. */
+::highlight(hlx) {
+    text-decoration: underline;
+    text-decoration-color: #C75B3B;
+    text-decoration-thickness: 1.5px;
+}
+
+/* The menu: a small dark pill floated over the paper, in the room's own
+   materials. Fixed against the viewport — the page never scrolls, and the
+   rects it is placed by already carry the paper's transforms. */
+.hl-menu {
+    position: fixed;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.65rem;
+    background-color: #2A2A2A;
+    border: 1px solid var(--shadow);
+    border-radius: 999px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.hl-menu.open {
+    display: flex;
+}
+
+.hl-swatch {
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s var(--ease-out);
+}
+
+.hl-swatch:hover {
+    transform: scale(1.2);
+}
+
+.hl-swatch.current {
+    border-color: var(--text-color);
+}
+
+.hl-swatch[data-color="0"] {
+    background-color: #F2DC8C;
+}
+
+.hl-swatch[data-color="1"] {
+    background-color: #EFBFA8;
+}
+
+.hl-swatch[data-color="2"] {
+    background-color: #C6DBAE;
+}
+
+.hl-swatch[data-color="3"] {
+    background-color: #C4CFEE;
+}
+
+.hl-menu-rule {
+    width: 1px;
+    height: 1.1rem;
+    background-color: var(--shadow);
+}
+
+.hl-act {
+    display: grid;
+    place-items: center;
+    padding: 0.15rem;
+    background: none;
+    border: none;
+    color: var(--grey-out);
+    cursor: pointer;
+}
+
+.hl-act:hover {
+    color: var(--highlight-color);
+}
+
+.hl-act svg {
+    width: 1.05rem;
+    height: 1.05rem;
+}
+
+.hl-act .when-copied {
+    display: none;
+}
+
+.hl-act.copied .when-idle {
+    display: none;
+}
+
+.hl-act.copied .when-copied {
+    display: block;
+    color: #C6DBAE;
+}
+
+/* Nothing exists to delete until a color has been picked. */
+.hl-menu[data-mode="draft"] [data-act="delete"] {
+    display: none;
+}
+
 /* The tools withdraw under the glass with the caption — same reasoning,
    same clock: a download button belongs to the resting view of the pile,
    and a zoomed-in reader is inside the paper. visibility rides along so the
