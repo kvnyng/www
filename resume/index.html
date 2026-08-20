@@ -1624,11 +1624,19 @@
             setTimeout(ensurePdf, 600);
             document.fonts.ready.then(() => {
                 fitCounter();
-                /* Philosopher is wider than the fallback: the crumb's box
-                   grows when it lands, so the question is asked again. */
-                measureCrumb();
+                /* Philosopher is wider than the fallback and sits on a
+                   different line, so when it lands both the crumb's own box
+                   and the pile's place in the room move under it — by a
+                   couple of pixels, which is a couple of pixels of every
+                   answer measured off them. So they are measured again. */
+                measure();
                 stepAside();
             });
+            /* And once more when the entrance is over: a measurement taken
+               while the pile is still rising reads the animation's position
+               rather than the pile's. Whichever of the two lands last is the
+               one that stands. */
+            pile.addEventListener('animationend', () => { measure(); stepAside(); }, { once: true });
             if (document.documentElement.classList.contains('js-preload')) {
                 Promise.all([
                     document.fonts.ready,
