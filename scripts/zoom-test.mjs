@@ -1426,6 +1426,102 @@ async function main() {
         skip('glide settle crisps under resting fingers', uncalibrated);
     }
 
+    /* ── 3g. the axis lock: down is down, and across still gets through ── */
+
+    /* A trackpad's scroll-down arcs, and the sideways it reports used to
+       walk the sheet off to one side of a column the reader was only going
+       down. The pan now drops the minor axis while the motion is clearly
+       along the other — and only then: a diagonal on purpose passes whole,
+       and a turn mid-gesture lets go of one axis and takes the other within
+       a few dozen pixels. The wheel's deltas are replayed as a pad would
+       send them, one event a frame with a gap between swipes, and the pan is
+       read straight off the zoomer's translation. The same lock sits on a
+       finger's pan, driven here as real touch events since nothing about a
+       wheel reaches that door. Tolerances are a pixel: the settle may nudge
+       the pan by half a device pixel after a swipe, never more. */
+    await escape();
+    try {
+        await evaluate('window.__bench.zoomTo(8)', 25000);
+        await sleep(SETTLE_MS);
+        const lock = await evaluate(`(async () => {
+            const read = () => { const m = window.__bench.mode(); return [m.tx, m.ty]; };
+            const tick = () => new Promise((r) => setTimeout(r, 16));
+            const swipe = async (events) => {
+                /* A gap first, so each swipe is its own hand on the pad. */
+                await new Promise((r) => setTimeout(r, 250));
+                const before = read();
+                for (const [dx, dy] of events) {
+                    window.__bench.wheel({ deltaX: dx, deltaY: dy });
+                    await tick();
+                }
+                const after = read();
+                return [after[0] - before[0], after[1] - before[1]];
+            };
+            const rep = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+            /* Down, as a pad reports it: a pixel or two of arc in every
+               event, the odd larger wobble. 76px of sideways asked for. */
+            const arc = rep(40, (i) => [i % 7 === 0 ? 5 : (i % 3 ? 1 : 2), 12]);
+            /* Across and down together, on purpose. */
+            const diag = rep(30, () => [8, 10]);
+            /* Down, then across, without lifting. */
+            const turn = [...rep(20, () => [0, 12]), ...rep(20, () => [12, 0])];
+            return { arc: await swipe(arc), diag: await swipe(diag), turn: await swipe(turn) };
+        })()`, 30000);
+        const f = (v) => `(${v[0].toFixed(1)}, ${v[1].toFixed(1)})`;
+        /* panX -= deltaX, so the pan moves against the deltas. */
+        check(`axis lock: an arcing scroll-down drops its sideways (${f(lock.arc)} of (-76, -480) asked)`,
+            Math.abs(lock.arc[0]) < 8 && Math.abs(lock.arc[1] + 480) <= 1,
+            `wheel asked for 76px across and 480 down; the pan moved ${f(lock.arc)} — ` +
+            `the across should be all but dropped (under 8px, the first event before the lock takes), the down whole`);
+        check(`axis lock: a diagonal passes whole (${f(lock.diag)} of (-240, -300) asked)`,
+            Math.abs(lock.diag[0] + 240) <= 1 && Math.abs(lock.diag[1] + 300) <= 1,
+            `wheel asked for 240 across and 300 down at once; the pan moved ${f(lock.diag)}`);
+        check(`axis lock: a turn mid-gesture comes through (${f(lock.turn)} of (-240, -240) asked)`,
+            lock.turn[0] <= -200 && Math.abs(lock.turn[1] + 240) <= 1,
+            `down 240 then across 240 without lifting; the pan moved ${f(lock.turn)} — ` +
+            `at least 200 of the across should survive the switch`);
+        note(`  axis lock: arc ${f(lock.arc)} diag ${f(lock.diag)} turn ${f(lock.turn)}`);
+    } catch (e) {
+        notOk('axis lock: arc / diagonal / turn through the wheel', String(e.message || e));
+    }
+
+    /* And the finger's door, which has its own lock. */
+    try {
+        await escape();
+        await evaluate('window.__bench.zoomTo(8)', 25000);
+        await sleep(SETTLE_MS);
+        await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+        const touch = (type, touchPoints) =>
+            cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+        const read = async () => {
+            const m = await evaluate('window.__bench.mode()');
+            return [m.tx, m.ty];
+        };
+        /* A thumb drawn down the screen, arcing: 30 moves of 12px down and
+           a pixel or two across, 48px of across asked for in all. */
+        let x = 640, y = 300;
+        await touch('touchStart', [{ x, y, id: 1 }]);
+        const before = await read();
+        for (let i = 0; i < 30; i++) {
+            x += i % 5 === 0 ? 2 : 1;
+            y += 12;
+            await touch('touchMove', [{ x, y, id: 1 }]);
+            await sleep(16);
+        }
+        const after = await read();
+        await touch('touchEnd', [{ x, y, id: 1 }]);
+        const moved = [after[0] - before[0], after[1] - before[1]];
+        /* A finger carries the paper with it: panY += dy. */
+        check(`axis lock: a thumb's arc down the sheet drops its sideways ((${moved[0].toFixed(1)}, ${moved[1].toFixed(1)}) of (48, 360) asked)`,
+            Math.abs(moved[0]) < 8 && Math.abs(moved[1] - 360) <= 1,
+            `the finger asked for 48px across and 360 down; the pan moved (${moved[0].toFixed(1)}, ${moved[1].toFixed(1)})`);
+    } catch (e) {
+        notOk('axis lock: a thumb\'s arc down the sheet drops its sideways', String(e.message || e));
+    } finally {
+        try { await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false }); } catch { }
+        await escape();
+    }
+
     /* ── 3d. the phase regression ─────────────────────────────────────── */
 
     /* The last thing between this page and the browser's own zoom was never
