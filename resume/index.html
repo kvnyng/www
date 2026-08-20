@@ -217,14 +217,14 @@
                it is grey again. The fade is the stylesheet's; this only
                decides when.
 
-               It costs one question asked of eight corners, and nothing here
-               is read back off the DOM: every number is one the script has
-               just written — the pile's measured box, the glass's zoom and
-               pan, the swing, the flight — composed by hand into the affine
-               each sheet is really being drawn through. A client rect in this
-               path would be a layout read taken immediately after a write,
-               which is the thing every gesture on this page is arranged to
-               avoid. */
+               It costs one question asked of eight corners, and nothing on
+               that path is read back off the DOM: every number is one the
+               script has just written — the pile's measured box, the glass's
+               zoom and pan, the swing, the flight — composed by hand into
+               the affine each sheet is really being drawn through. A client
+               rect in this path would be a layout read taken immediately
+               after a write, which is the thing every gesture on this page
+               is arranged to avoid. */
             const mat = (a, b, c, d, e, f) => ({ a, b, c, d, e, f });
             const ID = mat(1, 0, 0, 1, 0, 0);
             const mul = (m, n) => mat(
