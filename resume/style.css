@@ -68,9 +68,15 @@ header {
     left: 0;
     padding: 1.5rem 2rem;
     z-index: 10;
+    /* The box is a good deal larger than the words in it, and everything
+       below it is a surface a hand can take hold of. So the header itself
+       catches nothing and the words below claim back exactly their own line
+       — a drag begun in this corner is the pile's, not the furniture's. */
+    pointer-events: none;
 }
 
 .crumbs {
+    pointer-events: auto;
     font-family: var(--font-heading);
     font-size: 1.25rem;
     user-select: none;
