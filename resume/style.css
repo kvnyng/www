@@ -634,8 +634,15 @@ header.on-paper .crumbs:focus-within {
     cursor: pointer;
 }
 
-.hl-act:hover {
+.hl-act:not(:disabled):hover {
     color: var(--highlight-color);
+}
+
+/* Nothing on the pile: the arrow stays, greyed, so the pill keeps its
+   shape under a finger that knows where it was. */
+.hl-act:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .hl-act svg {

@@ -23,9 +23,10 @@
  *
  * Every change — a mark laid, recolored, taken away — is a step the reader
  * can walk back over with ⌘Z and forward again with ⇧⌘Z (Ctrl+Z and Ctrl+Y
- * off a Mac). The steps live in memory only, the way the sweep itself does:
- * a reload starts over, and the marks in the fragment are the only thing
- * that lasts.
+ * off a Mac), and the menu carries the same two as buttons for the hand
+ * that has no keyboard. The steps live in memory only, the way the sweep
+ * itself does: a reload starts over, and the marks in the fragment are the
+ * only thing that lasts.
  */
 (() => {
     'use strict';
@@ -45,7 +46,7 @@
     let draft = null;       // {s, e} of the current selection, before it has a color
     let active = null;      // the mark the open menu is about, by identity
     let mode = null;        // 'draft' | 'mark'
-    let menu;
+    let menu, undoBtn, redoBtn;
 
     let past = [];          // the marks as they were before each step, oldest first
     let future = [];        // the steps undone, the most recently undone last
@@ -213,6 +214,7 @@
         if (!sameMarks(before, marks)) {
             past.push(before);
             future = [];
+            updateHistory();
         }
         return out;
     }
@@ -233,6 +235,7 @@
         }
         render();
         sync();
+        updateHistory();
         return true;
     }
     const undo = () => travel(past, future);
@@ -322,7 +325,12 @@
         link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
         trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
         check: '<polyline points="20 6 9 17 4 12"/>',
+        undo: '<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>',
+        redo: '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>',
     };
+    /* The tooltips name the keys the reader actually has. */
+    const mac = /Mac|iP(hone|ad|od)/.test(navigator.userAgentData?.platform || navigator.platform || '');
+    const KEYS = mac ? { undo: '⌘Z', redo: '⇧⌘Z' } : { undo: 'Ctrl+Z', redo: 'Ctrl+Y' };
     const svg = (name, cls) =>
         `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -338,8 +346,13 @@
             + '<span class="hl-menu-rule"></span>'
             + `<button type="button" class="hl-act" data-act="copy" title="Copy text" aria-label="Copy text">${svg('copy', 'when-idle')}${svg('check', 'when-copied')}</button>`
             + `<button type="button" class="hl-act" data-act="link" title="Copy link with highlights" aria-label="Copy link with highlights">${svg('link', 'when-idle')}${svg('check', 'when-copied')}</button>`
-            + `<button type="button" class="hl-act" data-act="delete" title="Remove highlight" aria-label="Remove highlight">${svg('trash', 'when-idle')}</button>`;
+            + `<button type="button" class="hl-act" data-act="delete" title="Remove highlight" aria-label="Remove highlight">${svg('trash', 'when-idle')}</button>`
+            + '<span class="hl-menu-rule"></span>'
+            + `<button type="button" class="hl-act" data-act="undo" title="Undo (${KEYS.undo})" aria-label="Undo">${svg('undo', 'when-idle')}</button>`
+            + `<button type="button" class="hl-act" data-act="redo" title="Redo (${KEYS.redo})" aria-label="Redo">${svg('redo', 'when-idle')}</button>`;
         document.body.appendChild(menu);
+        undoBtn = menu.querySelector('[data-act="undo"]');
+        redoBtn = menu.querySelector('[data-act="redo"]');
 
         /* Pressing a button must not steal focus or the selection — the
          * selection is the very thing the button is about to act on. */
@@ -353,6 +366,14 @@
         menu.querySelectorAll('.hl-swatch').forEach((b) => {
             b.classList.toggle('current', mode === 'mark' && !!active && +b.dataset.color === active.c);
         });
+    }
+
+    /* The two arrows are always there and grey out rather than go away —
+     * a pill that kept its shape is one a finger can come back to, and ↶
+     * pressed to the bottom of the pile must not slide ↷ into its place. */
+    function updateHistory() {
+        undoBtn.disabled = !past.length;
+        redoBtn.disabled = !future.length;
     }
 
     /* Fixed positioning against the viewport — this page never scrolls, the
@@ -383,6 +404,7 @@
         mode = newMode;
         menu.dataset.mode = newMode;
         updateSwatches();
+        updateHistory();
         menu.style.visibility = 'hidden';
         menu.classList.add('open');
         const mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -415,7 +437,7 @@
 
     function onMenuClick(ev) {
         const btn = ev.target.closest('button');
-        if (!btn) return;
+        if (!btn || btn.disabled) return;
         if (btn.dataset.color !== undefined) {
             const c = +btn.dataset.color;
             if (mode === 'draft' && draft) {
@@ -445,6 +467,10 @@
             hideMenu();
             render();
             sync();
+        } else if (btn.dataset.act === 'undo') {
+            undo();
+        } else if (btn.dataset.act === 'redo') {
+            redo();
         }
     }
 
