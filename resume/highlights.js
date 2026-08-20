@@ -20,6 +20,12 @@
  * but the text is the same text, so the numbers still point at the same
  * words. A MutationObserver watches for those rebuilds and re-aims the
  * ranges. Browsers without the API just read the paper.
+ *
+ * Every change — a mark laid, recolored, taken away — is a step the reader
+ * can walk back over with ⌘Z and forward again with ⇧⌘Z (Ctrl+Z and Ctrl+Y
+ * off a Mac). The steps live in memory only, the way the sweep itself does:
+ * a reload starts over, and the marks in the fragment are the only thing
+ * that lasts.
  */
 (() => {
     'use strict';
@@ -40,6 +46,9 @@
     let active = null;      // the mark the open menu is about, by identity
     let mode = null;        // 'draft' | 'mark'
     let menu;
+
+    let past = [];          // the marks as they were before each step, oldest first
+    let future = [];        // the steps undone, the most recently undone last
 
     /* ── The text, measured whenever the layers are laid ──────────────── */
 
@@ -184,6 +193,50 @@
         if (active) CSS.highlights.set('hlx', new Highlight(rangeFor(active)));
         else CSS.highlights.delete('hlx');
     }
+
+    /* ── Undo and redo ────────────────────────────────────────────────── */
+
+    /* A step is any change that leaves the marks other than it found them:
+     * the marks as they were go on the pile, and a fresh step burns
+     * whatever had been undone before it. The piles hold copies — recolor
+     * writes into a mark in place, and a copy is what keeps a state already
+     * on the pile from being edited after the fact. A change that changed
+     * nothing, a swatch pressed over words already that color, is no step;
+     * an undo that does nothing would be a lie. */
+    const snapshot = () => marks.map((m) => ({ s: m.s, e: m.e, c: m.c }));
+    const sameMarks = (a, b) =>
+        a.length === b.length && a.every((m, i) => m.s === b[i].s && m.e === b[i].e && m.c === b[i].c);
+
+    function step(change) {
+        const before = snapshot();
+        const out = change();
+        if (!sameMarks(before, marks)) {
+            past.push(before);
+            future = [];
+        }
+        return out;
+    }
+
+    /* One step off one pile and onto the other. The open menu keeps its
+     * mark if a mark with the same span came back — an undone recolor,
+     * say, and the ring moves to the color restored — and is put down
+     * otherwise: what it was speaking about is gone. A draft menu is left
+     * alone; the sweep under it is the reader's and has not moved. */
+    function travel(from, to) {
+        if (!from.length) return false;
+        to.push(snapshot());
+        marks = from.pop();
+        if (active) {
+            const { s, e } = active;
+            active = marks.find((m) => m.s === s && m.e === e) || null;
+            if (active) updateSwatches(); else hideMenu();
+        }
+        render();
+        sync();
+        return true;
+    }
+    const undo = () => travel(past, future);
+    const redo = () => travel(future, past);
 
     /* ── The encoding ─────────────────────────────────────────────────── */
 
@@ -366,7 +419,7 @@
         if (btn.dataset.color !== undefined) {
             const c = +btn.dataset.color;
             if (mode === 'draft' && draft) {
-                const m = addMark(draft.s, draft.e, c);
+                const m = step(() => addMark(draft.s, draft.e, c));
                 draft = null;
                 const sel = getSelection();
                 if (sel) sel.removeAllRanges();
@@ -377,7 +430,7 @@
                  * a second thought about the color costs one more click. */
                 if (m) showMenu('mark', rangeFor(m)); else hideMenu();
             } else if (mode === 'mark' && active) {
-                active = recolor(active, c);
+                active = step(() => recolor(active, c));
                 render();
                 sync();
                 updateSwatches();
@@ -388,7 +441,7 @@
         } else if (btn.dataset.act === 'link') {
             copy(location.href, btn);
         } else if (btn.dataset.act === 'delete') {
-            if (active) removeMark(active);
+            if (active) step(() => removeMark(active));
             hideMenu();
             render();
             sync();
@@ -527,14 +580,26 @@
                 }
                 return;
             }
+            /* ⌘Z and ⇧⌘Z; Ctrl+Z and Ctrl+Y, or Ctrl+Shift+Z, off a Mac.
+             * A press with nothing under it is left to the browser, which
+             * has nothing under it either, and says so by not claiming it. */
+            if ((ev.metaKey || ev.ctrlKey) && !ev.altKey) {
+                const key = ev.key.toLowerCase();
+                const back = key === 'z' && !ev.shiftKey;
+                const forth = (key === 'z' && ev.shiftKey) || (key === 'y' && !ev.metaKey);
+                if ((back && undo()) || (forth && redo())) ev.preventDefault();
+                return;
+            }
             if (!ev.metaKey && !ev.ctrlKey && !ev.altKey &&
                 ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(ev.key)) {
                 if (menuOpen()) hideMenu();
             }
         });
         /* Pasting a friend's link over this page's address is a navigation
-         * only the fragment sees. */
-        addEventListener('hashchange', applyHash);
+         * only the fragment sees — and a step, so the marks it wrote over
+         * are one ⌘Z away. The first reading of the hash, back in reindex,
+         * is not: nothing was done yet that could be undone. */
+        addEventListener('hashchange', () => step(applyHash));
 
         /* The bench's window in: read-only views plus the same mutation
          * paths the buttons use. */
@@ -544,8 +609,11 @@
             seam: () => base[1],
             encode,
             decode,
-            add: (s, e, c) => { const m = addMark(s, e, c); render(); sync(); return m && { s: m.s, e: m.e, c: m.c }; },
-            clear: () => { marks = []; hideMenu(); render(); sync(); },
+            add: (s, e, c) => { const m = step(() => addMark(s, e, c)); render(); sync(); return m && { s: m.s, e: m.e, c: m.c }; },
+            clear: () => { step(() => { marks = []; }); hideMenu(); render(); sync(); },
+            undo,
+            redo,
+            history: () => ({ past: past.length, future: future.length }),
             menu: () => ({ open: menuOpen(), mode }),
             rect: (i) => {
                 const m = marks[i];
