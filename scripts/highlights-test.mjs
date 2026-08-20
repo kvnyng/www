@@ -553,6 +553,122 @@ try {
     check('and the menu closes', !(await evaluate('__hl.menu().open')));
     await evaluate('__hl.clear()');
 
+    /* ── Undo and redo ────────────────────────────────────────────────── */
+
+    /* Through the hook first: every change is a step, the piles are
+     * counted, and a fresh step burns the redo pile. */
+    const h0 = (await evaluate('__hl.history()')).past;
+    await evaluate('__hl.add(10, 20, 0); __hl.add(30, 40, 1)');
+    let hist = await evaluate('__hl.history()');
+    check('each change is a step', hist.past === h0 + 2 && hist.future === 0, JSON.stringify(hist));
+    check('undo takes the last mark back',
+        await evaluate('__hl.undo()')
+        && JSON.stringify(await evaluate('__hl.marks()')) === JSON.stringify([{ s: 10, e: 20, c: 0 }]),
+        JSON.stringify(await evaluate('__hl.marks()')));
+    check('and the fragment follows the undo',
+        (await evaluate('__hl.decode(location.hash.slice(4))?.marks.length')) === 1,
+        await evaluate('location.hash'));
+    check('redo lays it again',
+        await evaluate('__hl.redo()') && (await evaluate('__hl.marks()')).length === 2,
+        JSON.stringify(await evaluate('__hl.marks()')));
+    check('nothing ahead, redo declines', !(await evaluate('__hl.redo()')));
+    await evaluate('__hl.undo()');
+    await evaluate('__hl.add(50, 60, 2)');
+    hist = await evaluate('__hl.history()');
+    check('a new step burns the redo pile', hist.future === 0 && !(await evaluate('__hl.redo()')),
+        JSON.stringify(hist));
+    check('a change that changes nothing is no step',
+        await evaluate('(() => { const p = __hl.history().past; __hl.add(50, 60, 2); return __hl.history().past === p; })()'));
+
+    /* The keys, as the document hears them. dispatchEvent returns false
+     * when the press was claimed (preventDefault), true when it was left
+     * to the browser. */
+    const key = (k, mods) => evaluate(`document.dispatchEvent(new KeyboardEvent("keydown", ${
+        JSON.stringify({ key: k, bubbles: true, cancelable: true, ...mods })}))`);
+    check('⌘Z undoes', !(await key('z', { metaKey: true }))
+        && JSON.stringify(await evaluate('__hl.marks()')) === JSON.stringify([{ s: 10, e: 20, c: 0 }]),
+        JSON.stringify(await evaluate('__hl.marks()')));
+    check('⇧⌘Z redoes', !(await key('Z', { metaKey: true, shiftKey: true }))
+        && (await evaluate('__hl.marks()')).length === 2);
+    check('Ctrl+Z and Ctrl+Y do the same',
+        !(await key('z', { ctrlKey: true })) && (await evaluate('__hl.marks()')).length === 1
+        && !(await key('y', { ctrlKey: true })) && (await evaluate('__hl.marks()')).length === 2);
+    check('⌘Y is not claimed', await key('y', { metaKey: true }));
+    await evaluate('while (__hl.undo());');
+    check('a ⌘Z with nothing under it is left to the browser',
+        await key('z', { metaKey: true }) && (await evaluate('__hl.history()')).past === 0);
+    await evaluate('while (__hl.redo());');
+    check('redo walks all the way back up', (await evaluate('__hl.marks()')).length === 2);
+
+    /* A pasted link writes over the marks; that too is a step. */
+    const theirs = await evaluate('__hl.encode()');
+    await evaluate('__hl.clear()');
+    await evaluate(`location.hash = "#hl=${theirs}"`);
+    const pasted = await until(() => evaluate('__hl.marks().length === 2'), 3000);
+    check('a pasted link lands its marks', !!pasted);
+    check('and is one undo away from the marks it covered',
+        await evaluate('__hl.undo()') && (await evaluate('__hl.marks()')).length === 0);
+    await evaluate('__hl.clear()');
+
+    /* Through the menu, the way a finger would. The arrows are always in
+     * the pill; they grey out, they do not leave. */
+    await evaluate('getSelection().removeAllRanges(); __bench.select(12)');
+    await until(() => evaluate('__hl.menu().open && __hl.menu().mode === "draft"'), 3000);
+    const arrows = () => evaluate(`(() => {
+        const u = document.querySelector('.hl-menu [data-act=undo]');
+        const r = document.querySelector('.hl-menu [data-act=redo]');
+        return { undo: !u.disabled, redo: !r.disabled,
+            shown: getComputedStyle(u).display !== 'none' && getComputedStyle(r).display !== 'none' };
+    })()`);
+    let a = await arrows();
+    check('the draft menu shows both arrows', a.shown, JSON.stringify(a));
+    const beforeMark = (await evaluate('__hl.history()')).past;
+    await evaluate('__bench.press(".hl-swatch[data-color=\\"1\\"]")');
+    await until(() => evaluate('__hl.menu().mode === "mark"'), 3000);
+    a = await arrows();
+    check('with a mark just laid, undo is lit and redo is not', a.undo && !a.redo, JSON.stringify(a));
+    await evaluate('__bench.press(".hl-menu [data-act=redo]")');
+    check('a greyed arrow does nothing', (await evaluate('__hl.marks()')).length === 1);
+
+    /* A recolor undone: the mark survives by span, so the menu stays on it
+     * and the ring moves back. */
+    await evaluate('__bench.press(".hl-swatch[data-color=\\"3\\"]")');
+    check('the recolor is a step', (await evaluate('__hl.marks()'))[0].c === 3
+        && (await evaluate('__hl.history()')).past === beforeMark + 2);
+    await evaluate('__bench.press(".hl-menu [data-act=undo]")');
+    menu = await evaluate('__hl.menu()');
+    check('undoing a recolor keeps the menu on the mark',
+        menu.open && menu.mode === 'mark' && (await evaluate('__hl.marks()'))[0].c === 1
+        && await evaluate('document.querySelector(".hl-swatch.current")?.dataset.color') === '1',
+        JSON.stringify(menu));
+    a = await arrows();
+    check('and redo lights up', a.undo && a.redo, JSON.stringify(a));
+
+    /* The mark's own making undone: the menu has nothing left to speak
+     * about and goes down. */
+    await evaluate('__bench.press(".hl-menu [data-act=undo]")');
+    check('undoing the mark itself puts the menu down',
+        !(await evaluate('__hl.menu().open')) && (await evaluate('__hl.marks()')).length === 0);
+    check('the paint is gone with it', !(await evaluate('__bench.paints()')).hl1);
+
+    /* A new sweep finds redo waiting; pressing it under a draft leaves
+     * the draft — and the sweep — where they are. */
+    await evaluate('__bench.select(12)');
+    await until(() => evaluate('__hl.menu().open && __hl.menu().mode === "draft"'), 3000);
+    a = await arrows();
+    check('the next sweep offers redo', a.redo, JSON.stringify(a));
+    await evaluate('__bench.press(".hl-menu [data-act=redo]")');
+    menu = await evaluate('__hl.menu()');
+    check('redo under a draft relays the mark and keeps the draft',
+        (await evaluate('__hl.marks()')).length === 1 && menu.open && menu.mode === 'draft'
+        && !(await evaluate('getSelection().isCollapsed')),
+        JSON.stringify(menu));
+    await shoot('resume-highlights-undo.png');
+
+    await evaluate('__hl.clear()');
+    await evaluate('dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
+    await sleep(300);
+
     /* ── The menu under the glass ─────────────────────────────────────── */
 
     /* Zoomed in, a passage that wraps a line is as wide as the enlarged
