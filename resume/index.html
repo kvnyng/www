@@ -577,11 +577,46 @@
             let panning = false, panned = false, lx = 0, ly = 0;
             let zoomIdle = null;
 
+            /* Whether this page is being read in hands. Snapshotted at load
+               on purpose: the paper ceiling below must not flicker with a
+               convertible's mood, and a bench that switches touch on
+               mid-run must not change what the page already measured. */
+            const coarsePointer = matchMedia('(pointer: coarse)').matches;
+
+            /* The most laid-out paper a phone is asked to hold, in device
+               pixels along the sheet's long edge. Layout zoom asks the
+               engine to manage a box z times the pile — tiled, so only the
+               visible slice is ever rasterized, but a phone's tile memory
+               is the first thing to run out, and its way of saying so is
+               dropped tiles. Under the ceiling nothing changes; above it
+               the layout stops and the glass's transform carries the rest,
+               trading the last of the sharpness for a page that stays
+               painted. On a dpr-3 phone this binds around 40x; a desktop
+               pointer never meets it. */
+            const PAPER_CEILING = 65536;
+
+            /* What the paper is currently laid out at: the layout zoom the
+               last crisp write left behind, which a glide stretches from
+               and the next settle replaces. */
+            let zPaper = 1;
+
             /* One write for the glass, and it says the same thing twice in
                two languages: the whole handful is scaled by the transform,
                and the paper inside it is scaled by layout and unscaled again
-               by transform. See the note below the fold. */
-            const writeZoom = () => {
+               by transform. See the note below the fold.
+
+               Twice, that is, when the writer can afford both. The second
+               language is a relayout of two sheets — measured at 7ms of an
+               8ms frame budget on a desktop, a bill a phone cannot pay
+               sixty times a second at several times slower and three
+               device pixels to the css one. So `crisp` is the wheel's
+               dialect and the settle's: a touch gesture in flight writes
+               the transform alone and leaves the paper laid out where the
+               last settle put it, the two scales still cancelling exactly,
+               so the raster under the fingers is carried instead of remade
+               — and the words are drawn again at size a beat after the
+               hand rests. */
+            const writeZoom = (crisp) => {
                 if (z === 1) {
                     /* Put down clean, so the deal gets its paper back exactly
                        as the stylesheet describes it. */
@@ -593,10 +628,16 @@
                         p.style.transform = '';
                         p.style.willChange = '';
                     }
+                    zPaper = 1;
                     return;
                 }
                 zoomer.style.transform =
                     `translate3d(${panX}px, ${panY}px, 0) scale(${z})`;
+                if (!crisp) return;
+                const zl = coarsePointer
+                    ? Math.max(1, Math.min(z, PAPER_CEILING /
+                        ((devicePixelRatio || 1) * Math.max(pileW, pileH))))
+                    : z;
                 for (const p of papers) {
                     /* `zoom` needs a real length to work on: the inset:0 the
                        stylesheet gives this box resolves inside the zoomed
@@ -606,22 +647,23 @@
                        box, which is what lets right and bottom go. */
                     p.style.width = pileW + 'px';
                     p.style.height = pileH + 'px';
-                    p.style.zoom = z;
+                    p.style.zoom = zl;
                     /* And the inverse, on its own layer, so what the glass
                        magnifies this one shrinks back to nothing. */
-                    p.style.transform = `scale(${1 / z}) translateZ(0)`;
+                    p.style.transform = `scale(${1 / zl}) translateZ(0)`;
                     p.style.willChange = 'transform';
                 }
+                zPaper = zl;
             };
 
-            function applyZoom() {
+            function applyZoom(glide) {
                 /* The pan is leashed to the zoom: enough travel to reach any
                    corner of the enlarged sheet, never enough to lose it. */
                 const mx = (z - 1) * pileW * 0.75;
                 const my = (z - 1) * pileH * 0.75;
                 panX = clamp(panX, -mx, mx);
                 panY = clamp(panY, -my, my);
-                writeZoom();
+                writeZoom(!glide);
                 /* The caption is furniture of the pile, not the paper: under
                    the glass it steps out of the way, and it walks back in
                    when the glass is put down. But this class carries more
@@ -629,6 +671,12 @@
                    pins, and so what lets the sheets be drawn again from their
                    vectors. See the lens note below. */
                 scene.classList.toggle('zoomed', z !== 1);
+                /* And while a touch gesture is mid-flight the pins go back
+                   on: a compositor left free would try to re-raster on every
+                   frame of a pinch, and the whole economy of the glide is
+                   that it only ever stretches what is already drawn. The
+                   settle takes this off again. */
+                scene.classList.toggle('gliding', !!glide && z !== 1);
                 ensurePdf();
                 /* Every write restarts the wait for the hand to stop; putting
                    the glass down cancels it outright. */
@@ -664,9 +712,11 @@
                wrapper and one image, and nine when three hundred and fifty
                spans of invisible text come with it. Measured, both.
 
-               Which leaves the settle below, and it changes nothing about how
-               the glass works — it squares the pan onto the device grid, and
-               that is all. A layer set down between pixels is pushed through a
+               Which leaves the settle below, with two jobs now. It is where
+               a glide lands — the touch gesture's deferred crisp write, a
+               beat after the hand stops, fingers lifted or not. And it
+               squares the pan onto the device grid, which is all it ever
+               did for the wheel. A layer set down between pixels is pushed through a
                two-tap filter and every edge takes half a pixel of its
                neighbour's ink: an edge measures 1.47px across on the grid
                against 2.20px half a pixel off it. At most half a device pixel
@@ -684,10 +734,14 @@
                 const sy = pileTop + pileH / 2 + panY - (pileH / 2) * z;
                 panX += Math.round(sx * dpr) / dpr - sx;
                 panY += Math.round(sy * dpr) / dpr - sy;
-                writeZoom();
+                /* The hand has stopped, so the glide is over: pins off,
+                   layout on, and the sheet under the resting fingers drawn
+                   again at the size it is being read at. */
+                scene.classList.remove('gliding');
+                writeZoom(true);
             }
 
-            function zoomAt(cx, cy, nz) {
+            function zoomAt(cx, cy, nz, glide) {
                 /* A hand on the glass takes it out of the put-down. */
                 stopGlide();
                 /* The ceiling is generosity, not a limit of the renderer —
@@ -711,7 +765,7 @@
                 panX = sx - ((sx - panX) / z) * nz;
                 panY = sy - ((sy - panY) / z) * nz;
                 z = nz;
-                applyZoom();
+                applyZoom(glide);
             }
 
             /* ── Putting the glass down ───────────────────────────────────
@@ -835,7 +889,13 @@
                are a pinch. The stylesheet's touch-action: none is the other
                half of this: the browser never seizes the pair for a native
                zoom of the whole room, so a pinch reaches the same glass the
-               desktop's ctrl-wheel does, and the paper is what magnifies. */
+               desktop's ctrl-wheel does, and the paper is what magnifies.
+
+               Reaches the same glass, but speaks to it in the cheaper
+               dialect: every touch write glides — transform only, the
+               crisp layout deferred to the settle — because the wheel's
+               per-frame relayout is a desktop luxury. See the note above
+               writeZoom. */
             const touches = new Map();
             let pinch = null;
 
@@ -931,14 +991,20 @@
                     pinch.mx = mx;
                     pinch.my = my;
                     zoomAt(mx, my,
-                        pinch.z * Math.hypot(b.x - a.x, b.y - a.y) / pinch.dist);
+                        pinch.z * Math.hypot(b.x - a.x, b.y - a.y) / pinch.dist,
+                        true);
                 } else if (panning) {
                     panX += e.clientX - lx;
                     panY += e.clientY - ly;
                     lx = e.clientX;
                     ly = e.clientY;
                     panned = true;
-                    applyZoom();
+                    /* A finger's pan glides like its pinch — above all so a
+                       pan taking over from an unsettled pinch is never the
+                       stroke that pays the pinch's deferred layout. The
+                       mouse crisps as it always did; its writes re-say the
+                       settled values and cost nothing. */
+                    applyZoom(e.pointerType === 'touch');
                 } else if (touchDrag) {
                     const dx = touchDrag.x - e.clientX;
                     const dy = touchDrag.y - e.clientY;
