@@ -846,6 +846,67 @@
                 glideRaf = requestAnimationFrame(glideStep);
             }
 
+            /* ── The axis lock ────────────────────────────────────────────
+               A hand scrolling down a trackpad does not move straight down.
+               Two fingers drawn toward the wrist swing through an arc, and
+               the pad reports the arc faithfully — a pixel or two of
+               sideways in every event's worth of down. Summed over a column
+               of reading, that is a sheet wandering off to one side while
+               the reader was only ever going down it. Every scroll view on
+               the desk quietly corrects for this, and so does the glass now:
+               when the motion has a clear major axis, the minor one is
+               dropped.
+
+               But only when it is clear. A reader heading for the far corner
+               of a magnified sheet is going both ways on purpose, and a lock
+               that cannot tell an arc from a diagonal would take one of
+               those ways from them. So the decision is made from the shape
+               of the recent motion — not from the first event, and never
+               for the rest of the gesture. The absolute travel on each axis
+               is summed with a memory that fades by distance moved, so the
+               last few dozen pixels of the hand decide and whatever happened
+               a screen ago does not. Inside about twenty-two degrees of an
+               axis the minor component is zeroed; past about thirty-five
+               both pass; and in the band between, the lock keeps whichever
+               state it was in, which is the hysteresis that stops a motion
+               near the edge of the cone flickering between the two. The
+               fade by distance rather than by the clock is what lets a turn
+               mid-gesture come through: fifty pixels of genuine sideways is
+               enough to let go of down and take hold of across, while three
+               pixels of arc never is. What the lock drops is dropped — not
+               banked and paid out later — so nothing ever catches up with a
+               jump.
+
+               One lock per door, and each door says where its gestures
+               begin: the wheel reads a gap between events as a hand lifted
+               and landed again, a finger begins at the touch. The mouse's
+               drag is not filtered at all — a pointer does not arc, and what
+               it draws it means. */
+            const LOCK_FADE = 32;                                // px of travel the estimate remembers
+            const LOCK_IN = Math.tan(22.5 * Math.PI / 180);      // nearer an axis than this, and it locks
+            const LOCK_OUT = Math.tan(35 * Math.PI / 180);       // further from it than this, and it lets go
+            function axisLock() {
+                let ax = 0, ay = 0, axis = null;
+                return {
+                    reset() { ax = ay = 0; axis = null; },
+                    pass(dx, dy) {
+                        const k = Math.exp(-Math.hypot(dx, dy) / LOCK_FADE);
+                        ax = ax * k + Math.abs(dx);
+                        ay = ay * k + Math.abs(dy);
+                        const hi = Math.max(ax, ay);
+                        if (!hi) return [dx, dy];
+                        const major = ax >= ay ? 'x' : 'y';
+                        const r = Math.min(ax, ay) / hi;
+                        if (r < LOCK_IN) axis = major;
+                        else if (r > LOCK_OUT || axis !== major) axis = null;
+                        return axis === 'x' ? [dx, 0] : axis === 'y' ? [0, dy] : [dx, dy];
+                    },
+                };
+            }
+            const wheelLock = axisLock();
+            const touchLock = axisLock();
+            let wheelLast = -Infinity;
+
             addEventListener('wheel', (e) => {
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
@@ -864,8 +925,16 @@
                 if (z > 1) {
                     e.preventDefault();
                     stopGlide();
-                    panX -= e.deltaX;
-                    panY -= e.deltaY;
+                    /* A pause longer than the pad's own cadence is a hand
+                       lifted and landed again, and the lock starts fresh —
+                       so a swipe across after a swipe down is not made to
+                       spend its first few dozen pixels buying back the
+                       down. */
+                    if (e.timeStamp - wheelLast > 150) wheelLock.reset();
+                    wheelLast = e.timeStamp;
+                    const [dx, dy] = wheelLock.pass(e.deltaX, e.deltaY);
+                    panX -= dx;
+                    panY -= dy;
                     applyZoom();
                     return;
                 }
@@ -876,7 +945,9 @@
                    the same push on the same pile, so a two-finger swipe
                    deals, a scroll deals, and a gesture that is half of each
                    deals by the whole of what it is — no axis chosen for the
-                   hand, nothing of the gesture thrown away. Every wheel
+                   hand, nothing of the gesture thrown away. The lock above
+                   is for the pan, where across and down are different
+                   places; the deal has no two places to tell apart. Every wheel
                    event here is preventDefault'd, so a sideways one never
                    reaches the browser's own back-and-forward gesture. */
                 e.preventDefault();
@@ -945,6 +1016,7 @@
                         e.preventDefault();
                     } else if (z > 1) {
                         stopGlide();
+                        touchLock.reset();
                         panning = true;
                         panned = false;
                         lx = e.clientX;
@@ -994,10 +1066,15 @@
                         pinch.z * Math.hypot(b.x - a.x, b.y - a.y) / pinch.dist,
                         true);
                 } else if (panning) {
-                    panX += e.clientX - lx;
-                    panY += e.clientY - ly;
+                    let dx = e.clientX - lx, dy = e.clientY - ly;
                     lx = e.clientX;
                     ly = e.clientY;
+                    /* A thumb arcs the way two fingers on a pad do, and
+                       reads a zoomed sheet the same way — down a column.
+                       A mouse is left to draw what it draws. */
+                    if (e.pointerType === 'touch') [dx, dy] = touchLock.pass(dx, dy);
+                    panX += dx;
+                    panY += dy;
                     panned = true;
                     /* A finger's pan glides like its pinch — above all so a
                        pan taking over from an unsettled pinch is never the
@@ -1030,6 +1107,7 @@
                                a pan without the paper feeling the change of
                                grip. */
                             const [t] = touches.values();
+                            touchLock.reset();
                             panning = true;
                             lx = t.x;
                             ly = t.y;
