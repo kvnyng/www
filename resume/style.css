@@ -105,6 +105,59 @@ header {
     color: var(--text-color);
 }
 
+/* The crumb is furniture of the room, not of the paper: when a sheet arrives
+   underneath it, it steps off the page and waits on the grey. The halo above
+   was the old answer to a sheet passing behind — white words made legible
+   against whatever happens to be under them — and it stays, for the moment
+   of the crossing itself. This is the better answer for the rest of it.
+
+   Out quickly and back slowly. The paper is arriving, so the words should be
+   gone before it lands; and a sheet only passing through — the flight crosses
+   this corner on a narrow window — should not snap them back the instant its
+   trailing edge clears.
+
+   The fade is on the nav and not on the header because the header is the
+   .rise element: an entrance that fills both ways owns its element's opacity
+   forever after, and this needs that channel to itself. Same division the
+   counter makes with its perch. .on-paper is set by the script — see the
+   crumb's shadow in index.html. */
+.crumbs {
+    transition:
+        opacity 300ms var(--ease-out) 90ms,
+        transform 300ms var(--ease-out) 90ms;
+}
+
+header.on-paper .crumbs {
+    opacity: 0;
+    transform: translateY(-0.3rem);
+    /* pointer-events rather than visibility, which is what the tools use:
+       a faded crumb must not be clickable, and a hand reaching for the
+       paper under it must reach the paper — but visibility takes the link
+       out of the tab order too, and the way home should not depend on what
+       the pile happens to be lying over. So the words step out of the
+       mouse's reach and stay in the keyboard's. */
+    pointer-events: none;
+    transition:
+        opacity 180ms var(--ease-out),
+        transform 180ms var(--ease-out);
+}
+
+/* And a key that reaches them brings them back, whatever is underneath —
+   the halo in the block above is what makes that legible. */
+header.on-paper .crumbs:focus-within {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* Stepping aside is legibility rather than decoration, so it stays; the
+       drift that carries it is the part this reader asked not to have. */
+    header.on-paper .crumbs {
+        transform: none;
+    }
+}
+
 /* ── The scene ──────────────────────────────────────────────────────────
    One viewport, holding everything. overflow: clip, not hidden: the flying
    sheet leaves through this box's edges, and clip trims it without minting

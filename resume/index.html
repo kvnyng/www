@@ -150,6 +150,8 @@
     <script>
         (() => {
             const scene = document.querySelector('.scene');
+            const header = document.querySelector('header');
+            const crumbs = document.querySelector('.crumbs');
             const pile = document.querySelector('.pile');
             const zoomer = document.querySelector('.zoomer');
             const s1 = document.querySelector('.s1');
@@ -206,6 +208,153 @@
             let overTarget = 0;
             let overCurrent = 0;
 
+            /* ── The crumb and the paper ──────────────────────────────────
+               "kevin yang / resume" belongs to the room, not to the paper.
+               The glass can slide a sheet clean under it and the flight can
+               carry one across it, and white words over a printed page are a
+               smear however well haloed — so the crumb steps off the moment
+               the paper reaches it, and walks back on once the desk beneath
+               it is grey again. The fade is the stylesheet's; this only
+               decides when.
+
+               It costs one question asked of eight corners, and nothing here
+               is read back off the DOM: every number is one the script has
+               just written — the pile's measured box, the glass's zoom and
+               pan, the swing, the flight — composed by hand into the affine
+               each sheet is really being drawn through. A client rect in this
+               path would be a layout read taken immediately after a write,
+               which is the thing every gesture on this page is arranged to
+               avoid. */
+            const mat = (a, b, c, d, e, f) => ({ a, b, c, d, e, f });
+            const ID = mat(1, 0, 0, 1, 0, 0);
+            const mul = (m, n) => mat(
+                m.a * n.a + m.c * n.b, m.b * n.a + m.d * n.b,
+                m.a * n.c + m.c * n.d, m.b * n.c + m.d * n.d,
+                m.a * n.e + m.c * n.f + m.e, m.b * n.e + m.d * n.f + m.f);
+            const move = (x, y) => mat(1, 0, 0, 1, x, y);
+            const grow = (k) => mat(k, 0, 0, k, 0, 0);
+            const turn = (deg) => {
+                const r = deg * Math.PI / 180;
+                const c = Math.cos(r), s = Math.sin(r);
+                return mat(c, s, -s, c, 0, 0);
+            };
+            /* Every transform on this page turns about the middle of its own
+               box, which is what CSS does unasked. */
+            const about = (m, cx, cy) => mul(move(cx, cy), mul(m, move(-cx, -cy)));
+
+            /* Written by paint(), once a frame, beside the style strings they
+               are the arithmetic of: the swing, the two sheets' own moves, the
+               airborne one's pitch, and how much ink is left in it. */
+            let swingM = ID, s1M = ID, s2M = ID, s1Pitch = 0, s1Ink = 1;
+
+            /* .grab's perspective, in the stylesheet's own words. */
+            const DEPTH = 1400;
+
+            /* Where a sheet's four corners are, in viewport pixels, working
+               outward from the paper: the pitch, the sheet's own flight, the
+               swing, the glass, and the pile's place in the room — the
+               nesting the markup already has.
+
+               The pitch cannot be folded into the matrices with the rest,
+               because it is the one move on this page that leaves the plane:
+               the top edge of a lifted sheet leans away from the reader, and
+               .grab's perspective draws whatever leans away smaller. Measured
+               against the browser's own corners, a sheet modelled flat reads
+               as reaching some eighteen pixels further across the desk than
+               it does — which is a crumb stepping off for paper that never
+               arrives. So the depth is carried per corner and divided out,
+               which is all a perspective ever was. */
+            function corners(sheet, pitch) {
+                const cx = pileW / 2, cy = pileH / 2;
+                let out = move(pileLeft, pileTop);
+                out = mul(out, about(mul(move(panX, panY), grow(z)), cx, cy));
+                out = mul(out, about(swingM, cx, cy));
+                /* Everything inside the perspective is measured from the
+                   middle, which is where both the sheet's origin and .grab's
+                   vanishing point sit. */
+                out = mul(out, move(cx, cy));
+                const r = pitch * Math.PI / 180;
+                const cp = Math.cos(r), sp = Math.sin(r);
+                const at = (x, y) => {
+                    const b = y - cy;
+                    const w = 1 - b * sp / DEPTH;
+                    const a = x - cx, py = b * cp;
+                    const u = (sheet.a * a + sheet.c * py + sheet.e) / w;
+                    const v = (sheet.b * a + sheet.d * py + sheet.f) / w;
+                    return [out.a * u + out.c * v + out.e, out.b * u + out.d * v + out.f];
+                };
+                return [at(0, 0), at(pileW, 0), at(pileW, pileH), at(0, pileH)];
+            }
+
+            /* Do those corners and the crumb's box share any ground? Both
+               shapes are convex — a rectangle put through an affine is still
+               a parallelogram — so the separating-axis test settles it: if
+               there is any direction along which the two shadows do not
+               touch, the shapes do not touch. Four directions to try, the
+               box's two and the sheet's two. */
+            function meets(quad, box) {
+                const rect = [[box.l, box.t], [box.r, box.t], [box.r, box.b], [box.l, box.b]];
+                const axes = [[1, 0], [0, 1],
+                    [quad[0][1] - quad[1][1], quad[1][0] - quad[0][0]],
+                    [quad[1][1] - quad[2][1], quad[2][0] - quad[1][0]]];
+                for (const [ax, ay] of axes) {
+                    let alo = Infinity, ahi = -Infinity, blo = Infinity, bhi = -Infinity;
+                    for (const [x, y] of quad) {
+                        const d = x * ax + y * ay;
+                        if (d < alo) alo = d;
+                        if (d > ahi) ahi = d;
+                    }
+                    for (const [x, y] of rect) {
+                        const d = x * ax + y * ay;
+                        if (d < blo) blo = d;
+                        if (d > bhi) bhi = d;
+                    }
+                    if (ahi < blo || bhi < alo) return false;
+                }
+                return true;
+            }
+
+            /* The crumb's box, in viewport pixels, taken from offsets rather
+               than from a client rect: the header is the .rise element, and
+               at load it is mid-entrance a few pixels above where it will
+               come to rest. Offsets know nothing of transforms, which is
+               exactly the reading wanted — where the words live once they
+               have landed. The header is fixed to the top-left corner, so its
+               offsets are viewport coordinates already. Re-taken on resize,
+               and again once the fonts are in: until Philosopher lands this
+               is the fallback's idea of how wide the name is. */
+            let crumbBox = { l: 0, t: 0, r: 0, b: 0 };
+            function measureCrumb() {
+                const l = header.offsetLeft + crumbs.offsetLeft;
+                const t = header.offsetTop + crumbs.offsetTop;
+                crumbBox = { l, t, r: l + crumbs.offsetWidth, b: t + crumbs.offsetHeight };
+            }
+
+            /* How near the paper may come before the words leave, and how
+               much clear desk they want back before returning. Two numbers
+               and not one: a sheet resting exactly on the line would
+               otherwise chatter the fade on and off, and the wider return is
+               what makes a sheet merely passing through leave the corner
+               properly empty before the crumb trusts it. */
+            const STEP_OFF = 10;
+            const WALK_BACK = 24;
+            let onPaper = false;
+            function stepAside() {
+                const pad = onPaper ? WALK_BACK : STEP_OFF;
+                const box = {
+                    l: crumbBox.l - pad, t: crumbBox.t - pad,
+                    r: crumbBox.r + pad, b: crumbBox.b + pad,
+                };
+                /* The flying sheet counts for as long as there is ink in it,
+                   which is every frame but the reduced-motion reading, where
+                   the top page thins away in place instead of leaving. */
+                const covered = (s1Ink > 0.35 && meets(corners(s1M, s1Pitch), box)) ||
+                    meets(corners(s2M, 0), box);
+                if (covered === onPaper) return;
+                onPaper = covered;
+                header.classList.toggle('on-paper', covered);
+            }
+
             /* Measured once and on resize, never per event. The pile's own box
                is in here for a sharper reason than tidiness: under the glass
                the paper is restyled on every frame of the gesture, and a
@@ -224,6 +373,7 @@
                 pileH = r.height;
                 pileLeft = r.left;
                 pileTop = r.top;
+                measureCrumb();
             }
             measure();
 
@@ -309,8 +459,14 @@
                     s2.style.transform = 'none';
                     arm.style.transform = 'none';
                     grab.style.transform = '';
+                    swingM = s1M = s2M = ID;
+                    s1Pitch = 0;
+                    s1Ink = 1 - st;
                 } else {
                     grab.style.transform = swing;
+                    swingM = o === 0 ? ID : mul(
+                        move(0.14 * pileW * o, 0.07 * pileH * o * o), turn(5 * o));
+                    s1Ink = 1;
                     /* The flight is a cubic bezier in viewport units: a small
                        lift up-and-left first — the pick — then the long sweep
                        down and off the bottom-left, twisting as it goes.
@@ -329,6 +485,8 @@
                     s1.style.transform =
                         `translate3d(${x}px, ${y}px, 0) rotateZ(${-34 * st}deg)` +
                         ` rotateX(${6 * air}deg)`;
+                    s1M = mul(move(x, y), turn(-34 * st));
+                    s1Pitch = 6 * air;
                     /* The shade under the flying sheet slides out from beneath
                        it and thins — height read as light. */
                     aura1.style.opacity = String(0.38 + 0.22 * air);
@@ -343,6 +501,8 @@
                     const under =
                         `rotateZ(${1.7 * (1 - st)}deg) translate(${0.5 * (1 - st)}%, ${0.6 * (1 - st)}%)`;
                     s2.style.transform = under;
+                    s2M = mul(turn(1.7 * (1 - st)),
+                        move(0.005 * (1 - st) * pileW, 0.006 * (1 - st) * pileH));
                     arm.style.transform = swing ? `${swing} ${under}` : under;
                     aura2.style.opacity = String(0.30 + 0.12 * st);
                 }
@@ -352,6 +512,7 @@
                     shownWord = w;
                     live.textContent = w;
                 }
+                stepAside();
             }
 
             function step(ts) {
@@ -677,6 +838,10 @@
                    that it only ever stretches what is already drawn. The
                    settle takes this off again. */
                 scene.classList.toggle('gliding', !!glide && z !== 1);
+                /* The glass moves the paper without the deal moving at all,
+                   so the crumb is asked here too — this being the one door
+                   every zoom and pan passes through. */
+                stepAside();
                 ensurePdf();
                 /* Every write restarts the wait for the hand to stop; putting
                    the glass down cancels it outright. */
@@ -1457,7 +1622,13 @@
             /* The words and links want to be touchable without a zoom having
                happened first, so the PDF comes in soon after the entrance. */
             setTimeout(ensurePdf, 600);
-            document.fonts.ready.then(fitCounter);
+            document.fonts.ready.then(() => {
+                fitCounter();
+                /* Philosopher is wider than the fallback: the crumb's box
+                   grows when it lands, so the question is asked again. */
+                measureCrumb();
+                stepAside();
+            });
             if (document.documentElement.classList.contains('js-preload')) {
                 Promise.all([
                     document.fonts.ready,
