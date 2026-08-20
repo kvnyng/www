@@ -508,18 +508,60 @@
                 kick();
                 if (settleOnIdle) armIdle();
             }
-            /* Escape puts the glass down; the arrows and page keys deal. And
-               under the glass they do not deal at all — the same diversion
-               the wheel and a finger already make, for a better reason than
-               tidiness: the flight is a per-frame rotation of paper drawn at
-               1x, and the moment the glass is up the layer pins are off, so a
-               deal at 256x would be asking the compositor to re-raster two
-               enormous sheets on every frame of it. Escape first, then the
-               deal — which is also what makes "mid-deal the pins are right"
-               true, since mid-deal can no longer happen zoomed. */
+            /* ── The escape ladder ────────────────────────────────────────
+               One key, and it puts the room down a rung at a time, nearest
+               thing first: what the reader is holding, then how close they
+               are standing to the paper, then where the paper itself was
+               left. A press only ever spends one rung, so backing out is
+               the way in run backwards, and nothing is undone that was not
+               asked for twice.
+
+               The top rung is the highlighter's (highlights.js): it listens
+               on the document, which the bubble reaches before this window
+               does, and marks the press spent when it takes a menu or a
+               sweep down. The same rung stands here behind it, for the
+               reader whose browser has no Custom Highlight API and so never
+               got the highlighter at all — the sweep is still theirs to put
+               down.
+
+               Then the glass, which is let go of rather than taken away:
+               it travels home over about half a second, in doublings and
+               with the pan riding on it, and the note over lowerGlass has
+               the whole of why. There is no half-way out of a
+               magnification, so one press asks for all of it — and a
+               second press, arriving while it is still coming down, lands
+               it where it stands instead of spending the rung below.
+
+               Then the deal, the only rung with anything to watch — page
+               one flies back in on the tween the arrows already use, since
+               paint() is a pure function of how far the deal has gone and
+               running that number home runs the flight backwards.
+
+               The arrows and page keys do not deal under the glass at all,
+               the same diversion the wheel and a finger already make, for a
+               better reason than tidiness: the flight is a per-frame
+               rotation of paper drawn at 1x, and the moment the glass is up
+               the layer pins are off, so a deal at 256x would be asking the
+               compositor to re-raster two enormous sheets on every frame of
+               it. The ladder keeps that true of Escape as well — its
+               dealing rung is only ever reached with the glass already
+               down, so mid-deal still cannot happen zoomed. */
             addEventListener('keydown', (e) => {
                 if (e.metaKey || e.ctrlKey || e.altKey) return;
-                if (e.key === 'Escape') { z = 1; panX = panY = 0; applyZoom(); return; }
+                if (e.defaultPrevented) return;
+                if (e.key === 'Escape') {
+                    const sel = getSelection();
+                    if (sel && sel.rangeCount && !sel.isCollapsed) { sel.removeAllRanges(); return; }
+                    /* A second press while the glass is still on its way
+                       down is impatience, not the next rung: it lands it
+                       now. The rung below stays where it was — nobody
+                       reaches page one by holding Escape through a
+                       put-down they were already watching. */
+                    if (gliding()) { dropGlass(); return; }
+                    if (z > 1) { lowerGlass(); return; }
+                    goTo(0);
+                    return;
+                }
                 if (z > 1) return;
                 if (e.key === 'ArrowRight' || e.key === 'PageDown') goTo(1);
                 if (e.key === 'ArrowLeft' || e.key === 'PageUp') goTo(0);
@@ -646,6 +688,8 @@
             }
 
             function zoomAt(cx, cy, nz) {
+                /* A hand on the glass takes it out of the put-down. */
+                stopGlide();
                 /* The ceiling is generosity, not a limit of the renderer —
                    the compositor draws the tracings from their curves at
                    whatever scale it is handed, and the type does not begin to
@@ -670,6 +714,84 @@
                 applyZoom();
             }
 
+            /* ── Putting the glass down ───────────────────────────────────
+               Escape does not snatch the magnification away, it lets go of
+               it. This is the one move of the glass no hand is driving, so
+               it has to carry its own sense of weight, and three things
+               give it one.
+
+               It travels in doublings rather than in scale. A glass at 64x
+               brought home on a straight ramp would cross fifty-eight of
+               its sixty-three multiples in the first tenth of the move and
+               spend the rest of the time crawling from 6x to 1x; the eye
+               reads magnification logarithmically, so the ramp is laid in
+               logarithms — z is where it started raised to the share of the
+               trip that is left — and every doubling is given the same
+               slice of the clock. The smoothstep over the top of that is
+               the rest of the weight: the glass leaves rest and arrives at
+               rest with no corner at either end, which is the whole
+               difference between paper settling and paper being dropped.
+
+               The pan comes home tied to the zoom, not on a clock of its
+               own: at every instant it is the same fraction of where it
+               started that (z - 1) is of (z0 - 1). Not an arbitrary
+               pairing — it is exactly the leash applyZoom already keeps the
+               pan on, so a corner of the sheet held at 200x stays inside
+               the frame the whole way down. Untie the two and the paper
+               sails off the screen and comes back, because pan is counted
+               in the magnified layer's pixels and those are enormous.
+
+               And the length grows with the climb, a doubling costing the
+               same wherever it falls, up to a ceiling: past a certain
+               number of them the reader has stopped watching and started
+               waiting.
+
+               Any hand arriving takes it. Every door that writes the glass
+               — zoomAt, the wheel's pan, a drag, a pinch rebasing — stops
+               the glide before it writes, so a gesture mid-flight picks the
+               glass up from exactly where it had got to rather than
+               fighting it for the next frame. */
+            let glideRaf = null;
+            let glideFrom = 1, glidePanX = 0, glidePanY = 0, glideStart = 0, glideMs = 0;
+            const gliding = () => glideRaf !== null;
+
+            function stopGlide() {
+                if (glideRaf !== null) { cancelAnimationFrame(glideRaf); glideRaf = null; }
+            }
+
+            /* The glass on the desk, now, from wherever it was. */
+            function dropGlass() {
+                stopGlide();
+                z = 1;
+                panX = panY = 0;
+                applyZoom();
+            }
+
+            function lowerGlass() {
+                stopGlide();
+                /* Nothing to travel, or a reader who has asked for no
+                   travel: it is simply down. */
+                if (z === 1 || reduced.matches) { dropGlass(); return; }
+                glideFrom = z;
+                glidePanX = panX;
+                glidePanY = panY;
+                glideStart = performance.now();
+                glideMs = clamp(260 + 80 * Math.log2(z), 260, 700);
+                glideRaf = requestAnimationFrame(glideStep);
+            }
+
+            function glideStep(ts) {
+                const u = Math.min(1, (ts - glideStart) / glideMs);
+                if (u === 1) { dropGlass(); return; }
+                const e = smooth(u);
+                z = Math.pow(glideFrom, 1 - e);
+                const k = (z - 1) / (glideFrom - 1);
+                panX = glidePanX * k;
+                panY = glidePanY * k;
+                applyZoom();
+                glideRaf = requestAnimationFrame(glideStep);
+            }
+
             addEventListener('wheel', (e) => {
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
@@ -687,6 +809,7 @@
                    dealing it away — the deal comes back when the glass does. */
                 if (z > 1) {
                     e.preventDefault();
+                    stopGlide();
                     panX -= e.deltaX;
                     panY -= e.deltaY;
                     applyZoom();
@@ -721,6 +844,7 @@
                finger landing or the first one leaving never jolts the
                glass. */
             function rebasePinch() {
+                stopGlide();
                 const [a, b] = touches.values();
                 pinch = {
                     dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
@@ -736,7 +860,7 @@
                With fingers down these only silence the browser's own zoom;
                the pointers are the ones speaking. */
             let gestureBase = 1;
-            addEventListener('gesturestart', (e) => { e.preventDefault(); gestureBase = z; });
+            addEventListener('gesturestart', (e) => { e.preventDefault(); stopGlide(); gestureBase = z; });
             addEventListener('gesturechange', (e) => {
                 e.preventDefault();
                 if (touches.size) return;
@@ -760,6 +884,7 @@
                         rebasePinch();
                         e.preventDefault();
                     } else if (z > 1) {
+                        stopGlide();
                         panning = true;
                         panned = false;
                         lx = e.clientX;
@@ -775,6 +900,7 @@
                     return;
                 }
                 if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
+                    stopGlide();
                     panning = true;
                     panned = false;
                     lx = e.clientX;
@@ -870,6 +996,52 @@
             /* The right button pans, so the menu it usually carries is off
                within the scene. */
             scene.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            /* ── Sideways ─────────────────────────────────────────────────
+               A phone turned on its side has almost no height to fit a page
+               into, and the fit-the-pile rule above would honor it anyway:
+               a couple of hundred pixels of paper, whole and unreadable.
+               But the page already owns a better answer than a smaller
+               fit — the glass. So the turn itself raises it: the sheet is
+               zoomed until it spans the width and opened at the top,
+               because a sideways phone is a reading posture and reading
+               starts at the name. Everything after that is the glass as it
+               already works — a finger pans down the page, a pinch
+               adjusts, and turning back upright puts it down again.
+
+               Phones only, which is what the height clause is for: a
+               tablet on its side still has room to show the page whole,
+               and keeps it. */
+            const sideways = matchMedia(
+                '(orientation: landscape) and (pointer: coarse) and (max-height: 500px)');
+            function fillWidth() {
+                /* Fresh numbers first: the rotation that brings us here
+                   has just reshaped every box this math stands on. */
+                measure();
+                /* A thin breath either side — the width is the point. */
+                const m = 12;
+                const nz = (W - 2 * m) / pileW;
+                if (nz <= 1) return;
+                z = nz;
+                /* Centered across, and the top edge of the sheet laid a
+                   breath under the top of the screen. */
+                panX = W / 2 - (pileLeft + pileW / 2);
+                panY = m - pileTop + (pileH / 2) * (z - 1);
+                applyZoom();
+            }
+            sideways.addEventListener('change', () => {
+                stopGlide();
+                if (sideways.matches) {
+                    fillWidth();
+                } else {
+                    z = 1;
+                    panX = panY = 0;
+                    measure();
+                    applyZoom();
+                }
+            });
+            /* Arriving already sideways is the same posture as turning. */
+            if (sideways.matches) fillWidth();
 
             /* ── The lens ─────────────────────────────────────────────────
                There is no lens in this file, and that is the whole finding.
@@ -995,7 +1167,18 @@
                             span.insertBefore(deco, rest);
                         }
                     }
-                    /* The document's own hyperlinks, as real anchors. */
+                    /* The document's own hyperlinks, as real anchors. One
+                       destination is often printed twice in a row — the words,
+                       then the little glyph that trails them — and the PDF
+                       gives each its own box. Boxes that run consecutively to
+                       the same url go in a group; the group is what the hover
+                       wash lights, so a link that is spelled out and then
+                       drawn reads as the one link it is instead of two lamps
+                       flicking on and off under a moving cursor. Neighbouring
+                       boxes with different urls stay apart. The group is a
+                       wrapper and nothing else — the stylesheet gives it
+                       display:contents so it adds no box to the layer. */
+                    let group = null;
                     for (const a of await pdfPages[i].getAnnotations()) {
                         if (a.subtype !== 'Link' || !a.url) continue;
                         const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(a.rect);
@@ -1007,7 +1190,13 @@
                         link.style.top = Math.min(y1, y2) + 'px';
                         link.style.width = Math.abs(x2 - x1) + 'px';
                         link.style.height = Math.abs(y2 - y1) + 'px';
-                        container.appendChild(link);
+                        if (!group || group.dataset.url !== a.url) {
+                            group = document.createElement('div');
+                            group.className = 'linkgroup';
+                            group.dataset.url = a.url;
+                            container.appendChild(group);
+                        }
+                        group.appendChild(link);
                     }
                     /* The selection's safety net, last in the layer — see
                        the catcher block below and .endofcontent in the

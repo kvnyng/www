@@ -904,9 +904,24 @@ async function main() {
     };
     const measure = (data) =>
         evaluate(`window.__bench.measure("data:image/png;base64,${data}", ${CROP})`, 60000);
+    /* Escape no longer snatches the glass away — it lets go of it, and the
+       put-down is about half a second of flight in doublings (see the note
+       over lowerGlass in the page). So the bench waits for the glass to
+       reach the desk rather than assuming it is already there.
+
+       And presses again if it has not: this page is headless, which means
+       Chrome stops asking it for frames partway down and the flight can
+       hang mid-air where no reader's would. A second Escape mid-flight
+       lands it where it stands — the page's own answer to an impatient
+       reader, and the one thing here that will not wait on a frame. */
     const escape = async () => {
         await evaluate('window.__bench.key("Escape")');
-        await sleep(300);
+        const down = () => until(async () => (await evaluate('window.__bench.z()')) === 1, 800, 80);
+        if (!(await down())) {
+            await evaluate('window.__bench.key("Escape")');
+            await down();
+        }
+        await sleep(200);
     };
 
     /* ── 2. the pins, which are the whole mechanism ───────────────────── */

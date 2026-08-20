@@ -387,6 +387,54 @@ header {
     pointer-events: none;
 }
 
+/* A link's boxes, gathered by destination — see the linkgroup note in the
+   page's script. The group is a name for its boxes, not a thing on the page:
+   left to generate one, even an empty div opens a line in the layer's flow
+   (an out-of-flow child keeps its placeholder there), and the layer's flow is
+   what a Chromium selection resolves a stray cursor against. display:contents
+   leaves the flow exactly as it was before the wrapper existed, and the
+   anchors go on placing themselves against the layer. Hover still reaches the
+   group — that walks the tree, not the boxes. */
+.textlayer .linkgroup {
+    display: contents;
+}
+
+/* Under the cursor, a link takes a light wash — the whole group at once, so a
+   url that is spelled out and then drawn lights as the one link it is. The
+   boxes are the PDF's own annotation rectangles, already snug around the
+   words they cover, so the wash needs no padding of its own to read as a
+   stroke of highlighter rather than a button. It is painted from a
+   pseudo-element, which leaves the anchor's own box — the click target, the
+   cursor, the stepping aside during a selection — exactly what it was.
+   Multiply on the layer above is what lets a flat color through to the paper
+   while the ink stays black, same as the selection and the pens; this is the
+   accent terracotta at a fainter dilution than either, because a link at rest
+   is not a mark anyone made. And with the boxes untouchable while a selection
+   is being drawn, the wash goes out for the length of the drag: the hand is
+   sweeping words then, not aiming at a destination. */
+.textlayer .linkgroup a::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 2px;
+    background-color: #F1D6CE;
+    opacity: 0;
+    transition: opacity 130ms ease-out;
+}
+
+.textlayer .linkgroup:focus-within a::before {
+    opacity: 1;
+}
+
+/* Hover only where there is something to hover with. A finger leaves :hover
+   behind on whatever it last touched, and a link opened in a new tab would
+   come back to a page still holding one word lit for no reason. */
+@media (hover: hover) {
+    .textlayer .linkgroup:hover a::before {
+        opacity: 1;
+    }
+}
+
 /* The catcher, from pdf.js's own viewer. A Chromium browser resolves a
    cursor that has wandered off the words to the nearest text position in
    the layer — which, from the empty paper under a paragraph, means the
