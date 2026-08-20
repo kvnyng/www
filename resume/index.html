@@ -865,15 +865,18 @@
                for the rest of the gesture. The absolute travel on each axis
                is summed with a memory that fades by distance moved, so the
                last few dozen pixels of the hand decide and whatever happened
-               a screen ago does not. Inside about twenty-two degrees of an
-               axis the minor component is zeroed; past about thirty-five
-               both pass; and in the band between, the lock keeps whichever
+               a screen ago does not. Inside about nineteen degrees of an
+               axis the minor component is zeroed; past about thirty both
+               pass; and in the band between, the lock keeps whichever
                state it was in, which is the hysteresis that stops a motion
                near the edge of the cone flickering between the two. The
                fade by distance rather than by the clock is what lets a turn
-               mid-gesture come through: fifty pixels of genuine sideways is
+               mid-gesture come through: forty pixels of genuine sideways is
                enough to let go of down and take hold of across, while three
-               pixels of arc never is. What the lock drops is dropped — not
+               pixels of arc never is. The cone is kept narrow on purpose —
+               a lock is a favour to the hand going straight, and the hand
+               going anywhere else should not have to argue with it. What the
+               lock drops is dropped — not
                banked and paid out later — so nothing ever catches up with a
                jump.
 
@@ -882,9 +885,9 @@
                and landed again, a finger begins at the touch. The mouse's
                drag is not filtered at all — a pointer does not arc, and what
                it draws it means. */
-            const LOCK_FADE = 32;                                // px of travel the estimate remembers
-            const LOCK_IN = Math.tan(22.5 * Math.PI / 180);      // nearer an axis than this, and it locks
-            const LOCK_OUT = Math.tan(35 * Math.PI / 180);       // further from it than this, and it lets go
+            const LOCK_FADE = 27;                                // px of travel the estimate remembers
+            const LOCK_IN = Math.tan(19.1 * Math.PI / 180);      // nearer an axis than this, and it locks
+            const LOCK_OUT = Math.tan(29.75 * Math.PI / 180);    // further from it than this, and it lets go
             function axisLock() {
                 let ax = 0, ay = 0, axis = null;
                 return {
