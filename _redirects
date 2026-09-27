@@ -1,7 +1,10 @@
 # /resume is shelved, not gone: its code stays in resume/ for later, and
 # `bun run dev` still serves it locally (live-server ignores this file).
 # Cloudflare Pages reads this before it serves any asset, so the page and
-# everything under it (the sheets, the scripts) send visitors home instead.
+# everything under it (the sheets, the scripts) send visitors home instead,
+# as do the two files only it uses: the PDF it offers and its share card.
 # 302 so nothing caches the move; delete these lines to put it back.
-/resume    /  302
-/resume/*  /  302
+/resume                        /  302
+/resume/*                      /  302
+/kevin_yang_resume.pdf         /  302
+/assets/images/resume-og.png   /  302
